@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -9,11 +9,9 @@
  */
 #endregion
 
-using OpenRA.Traits;
-
 namespace OpenRA.Mods.Common.Traits
 {
-	public class RepairsUnitsInfo : TraitInfo<RepairsUnits>
+	public class RepairsUnitsInfo : PausableConditionalTraitInfo
 	{
 		[Desc("Cost in % of the unit value to fully repair the unit.")]
 		public readonly int ValuePercentage = 20;
@@ -30,7 +28,12 @@ namespace OpenRA.Mods.Common.Traits
 
 		[Desc("Experience gained by the player owning this actor for repairing an allied unit.")]
 		public readonly int PlayerExperience = 0;
+
+		public override object Create(ActorInitializer init) { return new RepairsUnits(this); }
 	}
 
-	public class RepairsUnits { }
+	public class RepairsUnits : PausableConditionalTrait<RepairsUnitsInfo>
+	{
+		public RepairsUnits(RepairsUnitsInfo info) : base(info) { }
+	}
 }

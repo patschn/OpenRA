@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -49,17 +49,27 @@ namespace OpenRA.Mods.Common.Orders
 			if (underCursor.Owner != world.LocalPlayer)
 				yield break;
 
+			Actor repairBuilding = null;
+			var orderId = "Repair";
+
 			// Test for generic Repairable (used on units).
 			var repairable = underCursor.TraitOrDefault<Repairable>();
-			if (repairable == null)
-				yield break;
+			if (repairable != null)
+				repairBuilding = repairable.FindRepairBuilding(underCursor);
+			else
+			{
+				var repairableNear = underCursor.TraitOrDefault<RepairableNear>();
+				if (repairableNear != null)
+				{
+					orderId = "RepairNear";
+					repairBuilding = repairableNear.FindRepairBuilding(underCursor);
+				}
+			}
 
-			// Find a building to repair at.
-			var repairBuilding = repairable.FindRepairBuilding(underCursor);
 			if (repairBuilding == null)
 				yield break;
 
-			yield return new Order("Repair", underCursor, false) { TargetActor = repairBuilding };
+			yield return new Order(orderId, underCursor, false) { TargetActor = repairBuilding, VisualFeedbackTarget = underCursor };
 		}
 
 		public void Tick(World world)

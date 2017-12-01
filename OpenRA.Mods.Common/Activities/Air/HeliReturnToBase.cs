@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -21,19 +21,31 @@ namespace OpenRA.Mods.Common.Activities
 		readonly Aircraft heli;
 		readonly bool alwaysLand;
 		readonly bool abortOnResupply;
+<<<<<<< HEAD
 
 		public HeliReturnToBase(Actor self, bool abortOnResupply, bool alwaysLand = true)
+=======
+		Actor dest;
+
+		public HeliReturnToBase(Actor self, bool abortOnResupply, Actor dest = null, bool alwaysLand = true)
+>>>>>>> upstream/master
 		{
 			heli = self.Trait<Aircraft>();
 			this.alwaysLand = alwaysLand;
 			this.abortOnResupply = abortOnResupply;
+<<<<<<< HEAD
+=======
+			this.dest = dest;
+>>>>>>> upstream/master
 		}
 
-		public Actor ChooseHelipad(Actor self)
+		public Actor ChooseHelipad(Actor self, bool unreservedOnly)
 		{
 			var rearmBuildings = heli.Info.RearmBuildings;
-			return self.World.Actors.Where(a => a.Owner == self.Owner).FirstOrDefault(
-				a => rearmBuildings.Contains(a.Info.Name) && !Reservable.IsReserved(a));
+			return self.World.Actors.Where(a => a.Owner == self.Owner
+				&& rearmBuildings.Contains(a.Info.Name)
+				&& (!unreservedOnly || !Reservable.IsReserved(a)))
+				.ClosestTo(self);
 		}
 
 		public override Activity Tick(Actor self)
@@ -41,15 +53,14 @@ namespace OpenRA.Mods.Common.Activities
 			if (IsCanceled)
 				return NextActivity;
 
-			var dest = ChooseHelipad(self);
+			if (dest == null || dest.IsDead || Reservable.IsReserved(dest))
+				dest = ChooseHelipad(self, true);
+
 			var initialFacing = heli.Info.InitialFacing;
 
-			if (dest == null)
+			if (dest == null || dest.IsDead)
 			{
-				var rearmBuildings = heli.Info.RearmBuildings;
-				var nearestHpad = self.World.ActorsHavingTrait<Reservable>()
-					.Where(a => a.Owner == self.Owner && rearmBuildings.Contains(a.Info.Name))
-					.ClosestTo(self);
+				var nearestHpad = ChooseHelipad(self, false);
 
 				if (nearestHpad == null)
 					return ActivityUtils.SequenceActivities(new Turn(self, initialFacing), new HeliLand(self, true), NextActivity);

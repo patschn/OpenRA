@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -16,7 +16,7 @@ using OpenRA.Traits;
 namespace OpenRA.Mods.Common.Traits
 {
 	[Desc("Lets the actor spread resources around it in a circle.")]
-	class SeedsResourceInfo : UpgradableTraitInfo
+	class SeedsResourceInfo : ConditionalTraitInfo
 	{
 		public readonly int Interval = 75;
 		public readonly string ResourceType = "Ore";
@@ -25,7 +25,7 @@ namespace OpenRA.Mods.Common.Traits
 		public override object Create(ActorInitializer init) { return new SeedsResource(init.Self, this); }
 	}
 
-	class SeedsResource : UpgradableTrait<SeedsResourceInfo>, ITick, ISeedableResource
+	class SeedsResource : ConditionalTrait<SeedsResourceInfo>, ITick, ISeedableResource
 	{
 		readonly SeedsResourceInfo info;
 
@@ -38,7 +38,7 @@ namespace OpenRA.Mods.Common.Traits
 			this.info = info;
 
 			resourceType = self.World.WorldActor.TraitsImplementing<ResourceType>()
-				.FirstOrDefault(t => t.Info.Name == info.ResourceType);
+				.FirstOrDefault(t => t.Info.Type == info.ResourceType);
 
 			if (resourceType == null)
 				throw new InvalidOperationException("No such resource type `{0}`".F(info.ResourceType));

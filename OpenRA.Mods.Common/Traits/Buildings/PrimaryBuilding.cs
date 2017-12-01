@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -26,10 +26,11 @@ namespace OpenRA.Mods.Common.Traits
 	}
 
 	[Desc("Used together with ClassicProductionQueue.")]
-	public class PrimaryBuildingInfo : ITraitInfo, Requires<UpgradeManagerInfo>
+	public class PrimaryBuildingInfo : ITraitInfo
 	{
-		[UpgradeGrantedReference, Desc("The upgrades to grant while the primary building.")]
-		public readonly string[] Upgrades = { "primary" };
+		[GrantedConditionReference]
+		[Desc("The condition to grant to self while this is the primary building.")]
+		public readonly string PrimaryCondition = null;
 
 		[Desc("The speech notification to play when selecting a primary building.")]
 		public readonly string SelectionNotification = "PrimaryBuildingSelected";
@@ -37,67 +38,73 @@ namespace OpenRA.Mods.Common.Traits
 		public object Create(ActorInitializer init) { return new PrimaryBuilding(init.Self, this); }
 	}
 
-	public class PrimaryBuilding : IIssueOrder, IResolveOrder
+	public class PrimaryBuilding : INotifyCreated, IIssueOrder, IResolveOrder
 	{
+		const string OrderID = "PrimaryProducer";
+
 		readonly PrimaryBuildingInfo info;
-		readonly UpgradeManager manager;
+		ConditionManager conditionManager;
+		int primaryToken = ConditionManager.InvalidConditionToken;
 
 		public bool IsPrimary { get; private set; }
 
 		public PrimaryBuilding(Actor self, PrimaryBuildingInfo info)
 		{
 			this.info = info;
-			manager = self.Trait<UpgradeManager>();
 		}
 
-		public IEnumerable<IOrderTargeter> Orders
+		void INotifyCreated.Created(Actor self)
 		{
-			get { yield return new DeployOrderTargeter("PrimaryProducer", 1); }
+			conditionManager = self.TraitOrDefault<ConditionManager>();
 		}
 
-		public Order IssueOrder(Actor self, IOrderTargeter order, Target target, bool queued)
+		IEnumerable<IOrderTargeter> IIssueOrder.Orders
 		{
-			if (order.OrderID == "PrimaryProducer")
+			get { yield return new DeployOrderTargeter(OrderID, 1); }
+		}
+
+		Order IIssueOrder.IssueOrder(Actor self, IOrderTargeter order, Target target, bool queued)
+		{
+			if (order.OrderID == OrderID)
 				return new Order(order.OrderID, self, false);
 
 			return null;
 		}
 
-		public void ResolveOrder(Actor self, Order order)
+		void IResolveOrder.ResolveOrder(Actor self, Order order)
 		{
-			if (order.OrderString == "PrimaryProducer")
-				SetPrimaryProducer(self, !IsPrimary);
+			var forceRallyPoint = RallyPoint.IsForceSet(order);
+			if (order.OrderString == OrderID || forceRallyPoint)
+				SetPrimaryProducer(self, !IsPrimary || forceRallyPoint);
 		}
 
-		public void SetPrimaryProducer(Actor self, bool state)
+		public void SetPrimaryProducer(Actor self, bool isPrimary)
 		{
-			if (state == false)
+			IsPrimary = isPrimary;
+
+			if (isPrimary)
 			{
-				IsPrimary = false;
-				foreach (var up in info.Upgrades)
-					manager.RevokeUpgrade(self, up, this);
-				return;
+				// Cancel existing primaries
+				// TODO: THIS IS SHIT
+				foreach (var p in self.Info.TraitInfo<ProductionInfo>().Produces)
+				{
+					foreach (var b in self.World
+							.ActorsWithTrait<PrimaryBuilding>()
+							.Where(a =>
+								a.Actor != self &&
+								a.Actor.Owner == self.Owner &&
+								a.Trait.IsPrimary &&
+								a.Actor.Info.TraitInfo<ProductionInfo>().Produces.Contains(p)))
+						b.Trait.SetPrimaryProducer(b.Actor, false);
+				}
+
+				if (conditionManager != null && primaryToken == ConditionManager.InvalidConditionToken && !string.IsNullOrEmpty(info.PrimaryCondition))
+					primaryToken = conditionManager.GrantCondition(self, info.PrimaryCondition);
+
+				Game.Sound.PlayNotification(self.World.Map.Rules, self.Owner, "Speech", info.SelectionNotification, self.Owner.Faction.InternalName);
 			}
-
-			// TODO: THIS IS SHIT
-			// Cancel existing primaries
-			foreach (var p in self.Info.TraitInfo<ProductionInfo>().Produces)
-			{
-				var productionType = p;		// benign closure hazard
-				foreach (var b in self.World
-					.ActorsWithTrait<PrimaryBuilding>()
-					.Where(a =>
-						a.Actor.Owner == self.Owner &&
-						a.Trait.IsPrimary &&
-						a.Actor.Info.TraitInfo<ProductionInfo>().Produces.Contains(productionType)))
-					b.Trait.SetPrimaryProducer(b.Actor, false);
-			}
-
-			IsPrimary = true;
-			foreach (var up in info.Upgrades)
-				manager.GrantUpgrade(self, up, this);
-
-			Game.Sound.PlayNotification(self.World.Map.Rules, self.Owner, "Speech", info.SelectionNotification, self.Owner.Faction.InternalName);
+			else if (primaryToken != ConditionManager.InvalidConditionToken)
+				primaryToken = conditionManager.RevokeCondition(self, primaryToken);
 		}
 	}
 }

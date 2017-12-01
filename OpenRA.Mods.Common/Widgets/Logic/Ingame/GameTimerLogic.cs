@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -62,14 +62,14 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 				status.GetText = statusText;
 			}
 
-			var percentage = widget.GetOrNull<LabelWidget>("GAME_TIMER_PERCENTAGE");
-			if (percentage != null)
+			var timerTooltip = timer as LabelWithTooltipWidget;
+			if (timerTooltip != null)
 			{
 				var connection = orderManager.Connection as ReplayConnection;
 				if (connection != null && connection.TickCount != 0)
-					percentage.GetText = () => "({0}%)".F(orderManager.NetFrameNumber * 100 / connection.TickCount);
-				else if (timer != null)
-					timer.Bounds.Width += percentage.Bounds.Width;
+					timerTooltip.GetTooltipText = () => "{0}% complete".F(orderManager.NetFrameNumber * 100 / connection.TickCount);
+				else
+					timerTooltip.GetTooltipText = null;
 			}
 		}
 	}

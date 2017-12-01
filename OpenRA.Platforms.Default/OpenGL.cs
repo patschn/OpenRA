@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -48,6 +48,7 @@ namespace OpenRA.Platforms.Default
 
 		// Errors
 		public const int GL_NO_ERROR = 0;
+		public const int GL_OUT_OF_MEMORY = 0x505;
 
 		// BeginMode
 		public const int GL_POINTS = 0;
@@ -489,9 +490,14 @@ namespace OpenRA.Platforms.Default
 			var n = glGetError();
 			if (n != GL_NO_ERROR)
 			{
-				var error = "GL Error: {0}\n{1}".F(n, new StackTrace());
+				var errorText = n == GL_OUT_OF_MEMORY ? "Out Of Memory" : n.ToString();
+				var error = "GL Error: {0}\n{1}".F(errorText, new StackTrace());
 				WriteGraphicsLog(error);
-				throw new InvalidOperationException("OpenGL Error: See graphics.log for details.");
+				const string ExceptionMessage = "OpenGL Error: See graphics.log for details.";
+				if (n == GL_OUT_OF_MEMORY)
+					throw new OutOfMemoryException(ExceptionMessage);
+				else
+					throw new InvalidOperationException(ExceptionMessage);
 			}
 		}
 

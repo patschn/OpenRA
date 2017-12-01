@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -19,7 +19,7 @@ namespace OpenRA.Mods.Common.Traits
 	public enum OwnerType { Victim, Killer, InternalName }
 
 	[Desc("Spawn another actor immediately upon death.")]
-	public class SpawnActorOnDeathInfo : ITraitInfo
+	public class SpawnActorOnDeathInfo : ConditionalTraitInfo
 	{
 		[ActorReference, FieldLoader.Require]
 		[Desc("Actor to spawn on death.")]
@@ -45,69 +45,77 @@ namespace OpenRA.Mods.Common.Traits
 		[Desc("Should an actor only be spawned when the 'Creeps' setting is true?")]
 		public readonly bool RequiresLobbyCreeps = false;
 
-		public object Create(ActorInitializer init) { return new SpawnActorOnDeath(init, this); }
+		[Desc("Offset of the spawned actor relative to the dying actor's position.",
+			"Warning: Spawning an actor outside the parent actor's footprint/influence might",
+			"lead to unexpected behaviour.")]
+		public readonly CVec Offset = CVec.Zero;
+
+		public override object Create(ActorInitializer init) { return new SpawnActorOnDeath(init, this); }
 	}
 
-	public class SpawnActorOnDeath : INotifyKilled
+	public class SpawnActorOnDeath : ConditionalTrait<SpawnActorOnDeathInfo>, INotifyKilled, INotifyRemovedFromWorld
 	{
-		readonly SpawnActorOnDeathInfo info;
 		readonly string faction;
 		readonly bool enabled;
 
+		Player attackingPlayer;
+
 		public SpawnActorOnDeath(ActorInitializer init, SpawnActorOnDeathInfo info)
+			: base(info)
 		{
-			this.info = info;
 			enabled = !info.RequiresLobbyCreeps || init.Self.World.WorldActor.Trait<MapCreeps>().Enabled;
 			faction = init.Contains<FactionInit>() ? init.Get<FactionInit, string>() : init.Self.Owner.Faction.InternalName;
 		}
 
-		public void Killed(Actor self, AttackInfo e)
+		void INotifyKilled.Killed(Actor self, AttackInfo e)
 		{
-			if (!enabled)
+			if (!enabled || IsTraitDisabled)
 				return;
 
 			if (!self.IsInWorld)
 				return;
 
-			if (self.World.SharedRandom.Next(100) > info.Probability)
+			if (self.World.SharedRandom.Next(100) > Info.Probability)
 				return;
 
-			if (info.DeathType != null && !e.Damage.DamageTypes.Contains(info.DeathType))
+			if (Info.DeathType != null && !e.Damage.DamageTypes.Contains(Info.DeathType))
 				return;
 
-			self.World.AddFrameEndTask(w =>
+			attackingPlayer = e.Attacker.Owner;
+		}
+
+		// Don't add the new actor to the world before all RemovedFromWorld callbacks have run
+		void INotifyRemovedFromWorld.RemovedFromWorld(Actor self)
+		{
+			if (attackingPlayer == null)
+				return;
+
+			var td = new TypeDictionary
 			{
-				// Actor has been disposed by something else before its death (for example `Enter`).
-				if (self.Disposed)
-					return;
+				new ParentActorInit(self),
+				new LocationInit(self.Location + Info.Offset),
+				new CenterPositionInit(self.CenterPosition),
+				new FactionInit(faction)
+			};
 
-				var td = new TypeDictionary
-				{
-					new ParentActorInit(self),
-					new LocationInit(self.Location),
-					new CenterPositionInit(self.CenterPosition),
-					new FactionInit(faction)
-				};
+			if (Info.OwnerType == OwnerType.Victim)
+				td.Add(new OwnerInit(self.Owner));
+			else if (Info.OwnerType == OwnerType.Killer)
+				td.Add(new OwnerInit(attackingPlayer));
+			else
+				td.Add(new OwnerInit(self.World.Players.First(p => p.InternalName == Info.InternalOwner)));
 
-				if (info.OwnerType == OwnerType.Victim)
-					td.Add(new OwnerInit(self.Owner));
-				else if (info.OwnerType == OwnerType.Killer)
-					td.Add(new OwnerInit(e.Attacker.Owner));
-				else
-					td.Add(new OwnerInit(self.World.Players.First(p => p.InternalName == info.InternalOwner)));
+			if (Info.SkipMakeAnimations)
+				td.Add(new SkipMakeAnimsInit());
 
-				if (info.SkipMakeAnimations)
-					td.Add(new SkipMakeAnimsInit());
+			foreach (var modifier in self.TraitsImplementing<IDeathActorInitModifier>())
+				modifier.ModifyDeathActorInit(self, td);
 
-				foreach (var modifier in self.TraitsImplementing<IDeathActorInitModifier>())
-					modifier.ModifyDeathActorInit(self, td);
+			var huskActor = self.TraitsImplementing<IHuskModifier>()
+				.Select(ihm => ihm.HuskActor(self))
+				.FirstOrDefault(a => a != null);
 
-				var huskActor = self.TraitsImplementing<IHuskModifier>()
-					.Select(ihm => ihm.HuskActor(self))
-					.FirstOrDefault(a => a != null);
-
-				w.CreateActor(huskActor ?? info.Actor, td);
-			});
+			self.World.AddFrameEndTask(w => w.CreateActor(huskActor ?? Info.Actor, td));
 		}
 	}
 }

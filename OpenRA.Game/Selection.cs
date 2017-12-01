@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -19,10 +19,23 @@ namespace OpenRA
 {
 	public class Selection
 	{
+		public int Hash { get; private set; }
+		public IEnumerable<Actor> Actors { get { return actors; } }
 		readonly HashSet<Actor> actors = new HashSet<Actor>();
+
+		void UpdateHash()
+		{
+			// Not a real hash, but things checking this only care about checking when the selection has changed
+			// For this purpose, having a false positive (forcing a refresh when nothing changed) is much better
+			// than a false negative (selection state mismatch)
+			Hash += 1;
+		}
+
 		public void Add(World w, Actor a)
 		{
 			actors.Add(a);
+			UpdateHash();
+
 			foreach (var sel in a.TraitsImplementing<INotifySelected>())
 				sel.Selected(a);
 			foreach (var ns in w.WorldActor.TraitsImplementing<INotifySelection>())
@@ -58,6 +71,8 @@ namespace OpenRA
 				}
 			}
 
+			UpdateHash();
+
 			foreach (var a in newSelection)
 				foreach (var sel in a.TraitsImplementing<INotifySelected>())
 					sel.Selected(a);
@@ -85,12 +100,17 @@ namespace OpenRA
 			}
 		}
 
-		public IEnumerable<Actor> Actors { get { return actors; } }
-		public void Clear() { actors.Clear(); }
+		public void Clear()
+		{
+			actors.Clear();
+			UpdateHash();
+		}
 
 		public void Tick(World world)
 		{
-			actors.RemoveWhere(a => !a.IsInWorld || (!a.Owner.IsAlliedWith(world.RenderPlayer) && world.FogObscures(a)));
+			var removed = actors.RemoveWhere(a => !a.IsInWorld || (!a.Owner.IsAlliedWith(world.RenderPlayer) && world.FogObscures(a)));
+			if (removed > 0)
+				UpdateHash();
 
 			foreach (var cg in controlGroups.Values)
 			{

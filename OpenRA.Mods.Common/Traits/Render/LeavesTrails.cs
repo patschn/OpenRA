@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -18,7 +18,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 	public enum TrailType { Cell, CenterPosition }
 
 	[Desc("Renders a sprite effect when leaving a cell.")]
-	public class LeavesTrailsInfo : UpgradableTraitInfo
+	public class LeavesTrailsInfo : ConditionalTraitInfo
 	{
 		public readonly string Image = null;
 
@@ -49,7 +49,8 @@ namespace OpenRA.Mods.Common.Traits.Render
 		[Desc("Delay between trail updates when moving.")]
 		public readonly int MovingInterval = 0;
 
-		[Desc("Delay before first trail.")]
+		[Desc("Delay before first trail.",
+			"Use negative values for falling back to the *Interval values.")]
 		public readonly int StartDelay = 0;
 
 		[Desc("Trail spawn positions relative to actor position. (forward, right, up) triples")]
@@ -61,7 +62,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 		public override object Create(ActorInitializer init) { return new LeavesTrails(init.Self, this); }
 	}
 
-	public class LeavesTrails : UpgradableTrait<LeavesTrailsInfo>, ITick, INotifyCreated
+	public class LeavesTrails : ConditionalTrait<LeavesTrailsInfo>, ITick
 	{
 		BodyOrientation body;
 		IFacing facing;
@@ -75,12 +76,14 @@ namespace OpenRA.Mods.Common.Traits.Render
 		}
 
 		WPos cachedPosition;
-		public void Created(Actor self)
+		protected override void Created(Actor self)
 		{
 			body = self.Trait<BodyOrientation>();
 			facing = self.TraitOrDefault<IFacing>();
 			cachedFacing = facing != null ? facing.Facing : 0;
 			cachedPosition = self.CenterPosition;
+
+			base.Created(self);
 		}
 
 		int ticks;
@@ -98,7 +101,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 			if ((isMoving && !Info.TrailWhileMoving) || (!isMoving && !Info.TrailWhileStationary))
 				return;
 
-			if (isMoving == wasStationary)
+			if (isMoving == wasStationary && (Info.StartDelay > -1))
 			{
 				cachedInterval = Info.StartDelay;
 				ticks = 0;
@@ -132,7 +135,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 			}
 		}
 
-		protected override void UpgradeEnabled(Actor self)
+		protected override void TraitEnabled(Actor self)
 		{
 			cachedPosition = self.CenterPosition;
 		}

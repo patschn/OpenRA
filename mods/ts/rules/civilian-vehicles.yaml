@@ -1,5 +1,8 @@
 4TNK:
-	Inherits: ^VoxelTank
+	Inherits: ^Tank
+	Inherits@VOXELS: ^VoxelActor
+	Inherits@EXPERIENCE: ^GainsExperience
+	Inherits@AUTOTARGET: ^AutoTargetAll
 	Valued:
 		Cost: 1700
 	Tooltip:
@@ -14,18 +17,20 @@
 		Type: Heavy
 	RevealsShroud:
 		Range: 6c0
+		MaxHeightDelta: 3
+		RequiresCondition: !inside-tunnel
 	Turreted:
 		TurnSpeed: 3
 	Armament@PRIMARY:
 		Weapon: 120mmx
-		LocalOffset: 500,60,360, 500,-85,360
+		LocalOffset: 707,85,509, 707,-120,509
 		MuzzleSequence: muzzle
+		MuzzlePalette: effect-ignore-lighting
 	Armament@SECONDARY:
 		Weapon: MammothTusk
-		LocalOffset: 0,200,410, 0,-200,410
+		LocalOffset: 0,283,580, 0,-283,580
 	AttackTurreted:
 		Voice: Attack
-	AutoTarget:
 	SelfHealing:
 		Delay: 10
 		HealIfBelow: 50
@@ -47,7 +52,9 @@
 	Mobile:
 		Speed: 56
 	RevealsShroud:
+		RequiresCondition: !inside-tunnel
 		Range: 5c0
+		MaxHeightDelta: 3
 
 TRUCKA:
 	Inherits: ^TRUCK
@@ -69,7 +76,9 @@ ICBM:
 		Speed: 85
 		TurnSpeed: 5
 	RevealsShroud:
+		RequiresCondition: !inside-tunnel
 		Range: 7c0
+		MaxHeightDelta: 3
 	Transforms:
 		IntoActor: gaicbm
 		Offset: -1,-1
@@ -87,18 +96,21 @@ BUS:
 	Mobile:
 		TurnSpeed: 5
 		Speed: 113
+		RequiresCondition: !empdisable && !loading
 	Health:
 		HP: 100
 	Armor:
 		Type: Light
 	RevealsShroud:
+		RequiresCondition: !inside-tunnel
 		Range: 5c0
+		MaxHeightDelta: 3
 	Cargo:
 		Types: Infantry
 		MaxWeight: 20
 		PipCount: 5
 		UnloadVoice: Unload
-		LoadingUpgrades: notmobile
+		LoadingCondition: loading
 		EjectOnDeath: true
 
 PICK:
@@ -110,18 +122,21 @@ PICK:
 	Mobile:
 		TurnSpeed: 5
 		Speed: 113
+		RequiresCondition: !empdisable && !loading
 	Health:
 		HP: 100
 	Armor:
 		Type: Light
 	RevealsShroud:
+		RequiresCondition: !inside-tunnel
 		Range: 5c0
+		MaxHeightDelta: 3
 	Cargo:
 		Types: Infantry
 		MaxWeight: 2
 		PipCount: 5
 		UnloadVoice: Unload
-		LoadingUpgrades: notmobile
+		LoadingCondition: loading
 		EjectOnDeath: true
 
 CAR:
@@ -133,18 +148,21 @@ CAR:
 	Mobile:
 		TurnSpeed: 5
 		Speed: 113
+		RequiresCondition: !empdisable && !loading
 	Health:
 		HP: 100
 	Armor:
 		Type: Light
 	RevealsShroud:
+		RequiresCondition: !inside-tunnel
 		Range: 5c0
+		MaxHeightDelta: 3
 	Cargo:
 		Types: Infantry
 		MaxWeight: 4
 		PipCount: 5
 		UnloadVoice: Unload
-		LoadingUpgrades: notmobile
+		LoadingCondition: loading
 		EjectOnDeath: true
 
 WINI:
@@ -156,18 +174,21 @@ WINI:
 	Mobile:
 		TurnSpeed: 5
 		Speed: 113
+		RequiresCondition: !empdisable && !loading
 	Health:
 		HP: 200
 	Armor:
 		Type: Light
 	RevealsShroud:
+		RequiresCondition: !inside-tunnel
 		Range: 5c0
+		MaxHeightDelta: 3
 	Cargo:
 		Types: Infantry
 		MaxWeight: 5
 		PipCount: 5
 		UnloadVoice: Unload
-		LoadingUpgrades: notmobile
+		LoadingCondition: loading
 		EjectOnDeath: true
 
 LOCOMOTIVE:

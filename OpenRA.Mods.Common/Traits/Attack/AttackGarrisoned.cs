@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -45,7 +45,7 @@ namespace OpenRA.Mods.Common.Traits
 		[PaletteReference] public readonly string MuzzlePalette = "effect";
 
 		public override object Create(ActorInitializer init) { return new AttackGarrisoned(init.Self, this); }
-		public void RulesetLoaded(Ruleset rules, ActorInfo ai)
+		public override void RulesetLoaded(Ruleset rules, ActorInfo ai)
 		{
 			if (PortOffsets.Length == 0)
 				throw new YamlException("PortOffsets must have at least one entry.");
@@ -67,6 +67,8 @@ namespace OpenRA.Mods.Common.Traits
 					Cone = PortCones[i],
 				};
 			}
+
+			base.RulesetLoaded(rules, ai);
 		}
 	}
 
@@ -90,8 +92,11 @@ namespace OpenRA.Mods.Common.Traits
 			paxFacing = new Dictionary<Actor, IFacing>();
 			paxPos = new Dictionary<Actor, IPositionable>();
 			paxRender = new Dictionary<Actor, RenderSprites>();
+		}
 
-			getArmaments = () => armaments;
+		protected override Func<IEnumerable<Armament>> InitializeGetArmaments(Actor self)
+		{
+			return () => armaments;
 		}
 
 		void INotifyPassengerEntered.OnPassengerEntered(Actor self, Actor passenger)
@@ -115,7 +120,7 @@ namespace OpenRA.Mods.Common.Traits
 		FirePort SelectFirePort(Actor self, WAngle targetYaw)
 		{
 			// Pick a random port that faces the target
-			var bodyYaw = facing.Value != null ? WAngle.FromFacing(facing.Value.Facing) : WAngle.Zero;
+			var bodyYaw = facing != null ? WAngle.FromFacing(facing.Facing) : WAngle.Zero;
 			var indices = Enumerable.Range(0, Info.Ports.Length).Shuffle(self.World.SharedRandom);
 			foreach (var i in indices)
 			{
@@ -141,10 +146,14 @@ namespace OpenRA.Mods.Common.Traits
 				return;
 
 			var pos = self.CenterPosition;
-			var targetYaw = (target.CenterPosition - self.CenterPosition).Yaw;
+			var targetedPosition = GetTargetPosition(pos, target);
+			var targetYaw = (targetedPosition - pos).Yaw;
 
 			foreach (var a in Armaments)
 			{
+				if (a.IsTraitDisabled)
+					continue;
+
 				var port = SelectFirePort(self, targetYaw);
 				if (port == null)
 					return;
@@ -153,8 +162,11 @@ namespace OpenRA.Mods.Common.Traits
 				paxFacing[a.Actor].Facing = muzzleFacing;
 				paxPos[a.Actor].SetVisualPosition(a.Actor, pos + PortOffset(self, port));
 
-				var barrel = a.CheckFire(a.Actor, facing.Value, target);
-				if (barrel != null && a.Info.MuzzleSequence != null)
+				var barrel = a.CheckFire(a.Actor, facing, target);
+				if (barrel == null)
+					continue;
+
+				if (a.Info.MuzzleSequence != null)
 				{
 					// Muzzle facing is fixed once the firing starts
 					var muzzleAnim = new Animation(self.World, paxRender[a.Actor].GetImage(a.Actor), () => muzzleFacing);

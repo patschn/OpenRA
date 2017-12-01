@@ -24,9 +24,8 @@ World:
 		Color: FE1100
 
 MISS:
-	AutoTargetIgnore:
 	Targetable:
-		TargetTypes: Ground, C4, DetonateAttack, Structure, MissionObjective
+		TargetTypes: Ground, C4, DetonateAttack, Structure, MissionObjective, NoAutoTarget
 
 LST.Unselectable.UnloadOnly:
 	Inherits: LST
@@ -38,7 +37,8 @@ LST.Unselectable.UnloadOnly:
 	Cargo:
 		MaxWeight: 0
 		PipCount: 0
-	AutoTargetIgnore:
+	Targetable:
+		TargetTypes: Ground, Water, Repair, NoAutoTarget
 
 SPY.Strong:
 	Inherits: SPY
@@ -55,7 +55,6 @@ SPY.Strong:
 	ExternalCaptures:
 		CaptureTypes: MissionObjective
 	Passenger:
-		GrantUpgrades: mobile
 
 DOG.Patrol:
 	Inherits: DOG
@@ -71,18 +70,20 @@ TRUK.Hijackable:
 	Buildable:
 		Prerequisites: ~disabled
 	Mobile:
-		UpgradeTypes: mobile
-		UpgradeMinEnabledLevel: 1
+		RequiresCondition: mobile
 	Cargo:
 		Types: Infantry
 		MaxWeight: 5
 		PipCount: 5
-	AutoTargetIgnore:
+		PassengerConditions:
+			spy.strong: mobile
+	Targetable:
+		TargetTypes: Ground, Repair, Vehicle, NoAutoTarget
 	-Huntable:
 	ExternalCapturable:
 		Type: MissionObjective
 		CaptureCompleteTime: 1
-	-SupplyTruck:
+	-DeliversCash:
 	RenderSprites:
 		Image: TRUK
 		Palette: truk-soviets
@@ -189,11 +190,7 @@ APC:
 	Buildable:
 		Prerequisites: ~disabled
 
-MNLY.AP:
-	Buildable:
-		Prerequisites: ~disabled
-
-MNLY.AT:
+MNLY:
 	Buildable:
 		Prerequisites: ~disabled
 

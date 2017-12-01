@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -13,8 +13,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Security.Cryptography;
 using System.Threading.Tasks;
+using OpenRA;
 using OpenRA.FileFormats;
 using OpenRA.Mods.Common.FileFormats;
 using OpenRA.Widgets;
@@ -481,11 +481,16 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 				if (Platform.CurrentPlatform != PlatformType.Windows)
 					return null;
 
-				var path = Microsoft.Win32.Registry.GetValue(source.RegistryKey, source.RegistryValue, null) as string;
-				if (path == null)
-					return null;
+				foreach (var prefix in source.RegistryPrefixes)
+				{
+					var path = Microsoft.Win32.Registry.GetValue(prefix + source.RegistryKey, source.RegistryValue, null) as string;
+					if (path == null)
+						continue;
 
-				return IsValidSourcePath(path, source) ? path : null;
+					return IsValidSourcePath(path, source) ? path : null;
+				}
+
+				return null;
 			}
 
 			if (source.Type == ModContent.SourceType.Disc)
@@ -500,18 +505,33 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 		{
 			try
 			{
-				foreach (var kv in source.IDFiles)
+				foreach (var kv in source.IDFiles.Nodes)
 				{
 					var filePath = Path.Combine(path, kv.Key);
 					if (!File.Exists(filePath))
 						return false;
 
 					using (var fileStream = File.OpenRead(filePath))
-					using (var csp = SHA1.Create())
 					{
-						var hash = new string(csp.ComputeHash(fileStream).SelectMany(a => a.ToString("x2")).ToArray());
-						if (hash != kv.Value)
-							return false;
+						var offsetNode = kv.Value.Nodes.FirstOrDefault(n => n.Key == "Offset");
+						var lengthNode = kv.Value.Nodes.FirstOrDefault(n => n.Key == "Length");
+						if (offsetNode != null || lengthNode != null)
+						{
+							var offset = 0L;
+							if (offsetNode != null)
+								offset = FieldLoader.GetValue<long>("Offset", offsetNode.Value.Value);
+
+							var length = fileStream.Length - offset;
+							if (lengthNode != null)
+								length = FieldLoader.GetValue<long>("Length", lengthNode.Value.Value);
+
+							fileStream.Position = offset;
+							var data = fileStream.ReadBytes((int)length);
+							if (CryptoUtil.SHA1Hash(data) != kv.Value.Value)
+								return false;
+						}
+						else if (CryptoUtil.SHA1Hash(fileStream) != kv.Value.Value)
+								return false;
 					}
 				}
 			}

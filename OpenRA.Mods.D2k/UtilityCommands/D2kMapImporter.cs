@@ -1,6 +1,6 @@
-﻿#region Copyright & License Information
+#region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -26,11 +26,11 @@ namespace OpenRA.Mods.D2k.UtilityCommands
 		{
 			{ 20, Pair.New("wormspawner", "Creeps") },
 			{ 23, Pair.New("mpspawn", "Neutral") },
-			{ 41, Pair.New("spicebloom", "Neutral") },
-			{ 42, Pair.New("spicebloom", "Neutral") },
-			{ 43, Pair.New("spicebloom", "Neutral") },
-			{ 44, Pair.New("spicebloom", "Neutral") },
-			{ 45, Pair.New("spicebloom", "Neutral") },
+			{ 41, Pair.New("spicebloom.spawnpoint", "Neutral") },
+			{ 42, Pair.New("spicebloom.spawnpoint", "Neutral") },
+			{ 43, Pair.New("spicebloom.spawnpoint", "Neutral") },
+			{ 44, Pair.New("spicebloom.spawnpoint", "Neutral") },
+			{ 45, Pair.New("spicebloom.spawnpoint", "Neutral") },
 
 			// Atreides:
 			{ 4, Pair.New("wall", "Atreides") },
@@ -276,7 +276,7 @@ namespace OpenRA.Mods.D2k.UtilityCommands
 				stream = File.OpenRead(filename);
 
 				if (stream.Length == 0 || stream.Length % 4 != 0)
-					throw new Exception("The map is in an unrecognized format!");
+					throw new ArgumentException("The map is in an unrecognized format!", "filename");
 
 				Initialize(filename);
 				FillMap();
@@ -380,6 +380,88 @@ namespace OpenRA.Mods.D2k.UtilityCommands
 
 		TerrainTile GetTile(int tileIndex)
 		{
+			// Some tiles are duplicates of other tiles, just on a different tileset
+			if (tilesetName.ToLower() == "bloxbgbs.r8")
+			{
+				if (tileIndex == 355)
+					return new TerrainTile(441, 0);
+
+				if (tileIndex == 375)
+					return new TerrainTile(442, 0);
+			}
+
+			if (tilesetName.ToLower() == "bloxtree.r8")
+			{
+				var indices = new[] { 683, 684, 685, 706, 703, 704, 705, 726, 723, 724, 725, 746, 743, 744, 745, 747 };
+				for (var i = 0; i < 16; i++)
+					if (tileIndex == indices[i])
+						return new TerrainTile(474, (byte)i);
+
+				indices = new[] { 369, 370, 389, 390 };
+				for (var i = 0; i < 4; i++)
+					if (tileIndex == indices[i])
+						return new TerrainTile(117, (byte)i);
+
+				indices = new[] { 661, 662, 681, 682 };
+				for (var i = 0; i < 4; i++)
+					if (tileIndex == indices[i])
+						return new TerrainTile(251, (byte)i);
+
+				if (tileIndex == 322)
+					return new TerrainTile(215, 0);
+			}
+
+			if (tilesetName.ToLower() == "bloxwast.r8")
+			{
+				if (tileIndex == 342)
+					return new TerrainTile(250, 0);
+
+				if (tileIndex == 383)
+					return new TerrainTile(121, 1);
+
+				if (tileIndex == 384)
+					return new TerrainTile(1046, 0);
+
+				if (tileIndex == 579)
+					return new TerrainTile(80, 0);
+
+				if (tileIndex == 597)
+					return new TerrainTile(80, 0);
+
+				if (tileIndex == 598)
+					return new TerrainTile(470, 0);
+
+				if (tileIndex == 599)
+					return new TerrainTile(470, 1);
+
+				if (tileIndex == 608)
+					return new TerrainTile(58, 0);
+
+				if (tileIndex == 627)
+					return new TerrainTile(248, 0);
+
+				if (tileIndex == 628)
+					return new TerrainTile(248, 1);
+
+				if (tileIndex == 719)
+					return new TerrainTile(275, 0);
+
+				var indices = new[] { 340, 341, 360, 361 };
+				for (var i = 0; i < 4; i++)
+					if (tileIndex == indices[i])
+						return new TerrainTile(308, (byte)i);
+
+				indices = new[] { 660, 661, 662, 680, 681, 682 };
+				for (var i = 0; i < 6; i++)
+					if (tileIndex == indices[i])
+						return new TerrainTile(443, (byte)i);
+
+				indices = new[] { 609, 610, 629, 630 };
+				for (var i = 0; i < 4; i++)
+					if (tileIndex == indices[i])
+						return new TerrainTile(251, (byte)i);
+			}
+
 			// Get the first tileset template that contains the Frame ID of the original map's tile with the requested index
 			var template = tileSetsFromYaml.FirstOrDefault(x => x.Frames.Contains(tileIndex));
 

@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -22,6 +22,7 @@ namespace OpenRA
 	public static class Platform
 	{
 		public static PlatformType CurrentPlatform { get { return currentPlatform.Value; } }
+		public static readonly Guid SessionGUID = Guid.NewGuid();
 
 		static Lazy<PlatformType> currentPlatform = Exts.Lazy(GetCurrentPlatform);
 
@@ -63,14 +64,19 @@ namespace OpenRA
 			}
 		}
 
+		/// <summary>
+		/// Directory containing user-specific support files (settings, maps, replays, game data, etc).
+		/// The directory will automatically be created if it does not exist when this is queried.
+		/// </summary>
 		public static string SupportDir { get { return supportDir.Value; } }
 		static Lazy<string> supportDir = Exts.Lazy(GetSupportDir);
 
 		static string GetSupportDir()
 		{
-			// Use a local directory in the game root if it exists
-			if (Directory.Exists("Support"))
-				return "Support" + Path.DirectorySeparatorChar;
+			// Use a local directory in the game root if it exists (shared with the system support dir)
+			var localSupportDir = Path.Combine(GameDir, "Support");
+			if (Directory.Exists(localSupportDir))
+				return localSupportDir + Path.DirectorySeparatorChar;
 
 			var dir = Environment.GetFolderPath(Environment.SpecialFolder.Personal);
 
@@ -87,18 +93,54 @@ namespace OpenRA
 					break;
 			}
 
-			if (!Directory.Exists(dir))
-				Directory.CreateDirectory(dir);
-
 			return dir + Path.DirectorySeparatorChar;
 		}
 
-		public static string GameDir { get { return AppDomain.CurrentDomain.BaseDirectory; } }
+		/// <summary>
+		/// Directory containing system-wide support files (mod metadata).
+		/// This directory is not guaranteed to exist or be writable.
+		/// Consumers are expected to check the validity of the returned value, and
+		/// fall back to the user support directory if necessary.
+		/// </summary>
+		public static string SystemSupportDir { get { return systemSupportDir.Value; } }
+		static Lazy<string> systemSupportDir = Exts.Lazy(GetSystemSupportDir);
+
+		static string GetSystemSupportDir()
+		{
+			// Use a local directory in the game root if it exists (shared with the system support dir)
+			var localSupportDir = Path.Combine(GameDir, "Support");
+			if (Directory.Exists(localSupportDir))
+				return localSupportDir + Path.DirectorySeparatorChar;
+
+			switch (CurrentPlatform)
+			{
+				case PlatformType.Windows:
+					return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "OpenRA") + Path.DirectorySeparatorChar;
+				case PlatformType.OSX:
+					return "/Library/Application Support/OpenRA/";
+				default:
+					return "/var/games/openra/";
+			}
+		}
+
+		public static string GameDir
+		{
+			get
+			{
+				var dir = AppDomain.CurrentDomain.BaseDirectory;
+
+				// Add trailing DirectorySeparator for some buggy AppPool hosts
+				if (!dir.EndsWith(Path.DirectorySeparatorChar.ToString(), StringComparison.Ordinal))
+					dir += Path.DirectorySeparatorChar;
+
+				return dir;
+			}
+		}
 
 		/// <summary>Replaces special character prefixes with full paths.</summary>
 		public static string ResolvePath(string path)
 		{
-			path = path.TrimEnd(new char[] { ' ', '\t' });
+			path = path.TrimEnd(' ', '\t');
 
 			// Paths starting with ^ are relative to the support dir
 			if (path.StartsWith("^", StringComparison.Ordinal))

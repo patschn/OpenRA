@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -39,7 +39,7 @@ namespace OpenRA.Mods.Common.LoadScreens
 			Game.Renderer.EndFrame(new NullInputHandler());
 		}
 
-		public void StartGame(Arguments args)
+		public virtual void StartGame(Arguments args)
 		{
 			Launch = new LaunchArguments(args);
 			Ui.ResetAll();
@@ -109,12 +109,23 @@ namespace OpenRA.Mods.Common.LoadScreens
 			GC.SuppressFinalize(this);
 		}
 
-		public bool RequiredContentIsInstalled()
+		public bool BeforeLoad()
 		{
+			// If a ModContent section is defined then we need to make sure that the
+			// required content is installed or switch to the defined content installer.
+			if (!modData.Manifest.Contains<ModContent>())
+				return true;
+
 			var content = modData.Manifest.Get<ModContent>();
-			return content.Packages
+			var contentInstalled = content.Packages
 				.Where(p => p.Value.Required)
 				.All(p => p.Value.TestFiles.All(f => File.Exists(Platform.ResolvePath(f))));
+
+			if (contentInstalled)
+				return true;
+
+			Game.InitializeMod(content.ContentInstallerMod, new Arguments(new[] { "Content.Mod=" + modData.Manifest.Id }));
+			return false;
 		}
 	}
 }

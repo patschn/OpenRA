@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -30,17 +30,23 @@ namespace OpenRA.Mods.Common.Effects
 		readonly Animation circles;
 		readonly Animation poster;
 		readonly Animation clock;
+		readonly int duration;
 
+		int delay;
 		int arrowHeight = MaxArrowHeight;
 		int arrowSpeed = 50;
+		int tick;
 
 		// Player-placed beacons are removed after a delay
-		public Beacon(Player owner, WPos position, int duration, string beaconPalette, bool isPlayerPalette, string beaconCollection, string arrowSprite, string circleSprite)
+		public Beacon(Player owner, WPos position, int duration, string beaconPalette, bool isPlayerPalette,
+			string beaconCollection, string arrowSprite, string circleSprite, int delay = 0)
 		{
 			this.owner = owner;
 			this.position = position;
 			this.beaconPalette = beaconPalette;
 			this.isPlayerPalette = isPlayerPalette;
+			this.duration = duration;
+			this.delay = delay;
 
 			if (!string.IsNullOrEmpty(arrowSprite))
 			{
@@ -53,15 +59,12 @@ namespace OpenRA.Mods.Common.Effects
 				circles = new Animation(owner.World, beaconCollection);
 				circles.Play(circleSprite);
 			}
-
-			if (duration > 0)
-				owner.World.AddFrameEndTask(w => w.Add(new DelayedAction(duration, () => owner.World.Remove(this))));
 		}
 
-		// Support power beacons are expected to clean themselves up
+		// By default, support power beacons are expected to clean themselves up
 		public Beacon(Player owner, WPos position, bool isPlayerPalette, string palette, string posterCollection, string posterType, string posterPalette,
-			string arrowSequence, string circleSequence, string clockSequence, Func<float> clockFraction)
-				: this(owner, position, -1, palette, isPlayerPalette, posterCollection, arrowSequence, circleSequence)
+			string arrowSequence, string circleSequence, string clockSequence, Func<float> clockFraction, int delay = 0, int duration = -1)
+				: this(owner, position, duration, palette, isPlayerPalette, posterCollection, arrowSequence, circleSequence, delay)
 		{
 			this.posterPalette = posterPalette;
 
@@ -80,6 +83,9 @@ namespace OpenRA.Mods.Common.Effects
 
 		void IEffect.Tick(World world)
 		{
+			if (delay-- > 0)
+				return;
+
 			arrowHeight += arrowSpeed;
 			var clamped = arrowHeight.Clamp(0, MaxArrowHeight);
 			if (arrowHeight != clamped)
@@ -96,12 +102,18 @@ namespace OpenRA.Mods.Common.Effects
 
 			if (clock != null)
 				clock.Tick();
+
+			if (duration > 0 && duration <= tick++)
+				owner.World.AddFrameEndTask(w => w.Remove(this));
 		}
 
 		IEnumerable<IRenderable> IEffect.Render(WorldRenderer r) { return SpriteRenderable.None; }
 
 		IEnumerable<IRenderable> IEffectAboveShroud.RenderAboveShroud(WorldRenderer r)
 		{
+			if (delay > 0)
+				yield break;
+
 			if (!owner.IsAlliedWith(owner.World.RenderPlayer))
 				yield break;
 

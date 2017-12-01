@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -11,6 +11,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using OpenRA.Mods.Common.Effects;
 using OpenRA.Primitives;
 using OpenRA.Traits;
@@ -18,13 +19,16 @@ using OpenRA.Traits;
 namespace OpenRA.Mods.Common.Traits
 {
 	[Desc("This actor's experience increases when it has killed a GivesExperience actor.")]
-	public class GainsExperienceInfo : ITraitInfo, Requires<ValuedInfo>, Requires<UpgradeManagerInfo>
+	public class GainsExperienceInfo : ITraitInfo, Requires<ValuedInfo>
 	{
 		[FieldLoader.Require]
-		[Desc("Upgrades to grant at each level.",
+		[Desc("Condition to grant at each level.",
 			"Key is the XP requirements for each level as a percentage of our own value.",
-			"Value is a list of the upgrade types to grant")]
-		public readonly Dictionary<int, string[]> Upgrades = null;
+			"Value is the condition to grant.")]
+		public readonly Dictionary<int, string> Conditions = null;
+
+		[GrantedConditionReference]
+		public IEnumerable<string> LinterConditions { get { return Conditions.Values; } }
 
 		[Desc("Palette for the level up sprite.")]
 		[PaletteReference] public readonly string LevelUpPalette = "effect";
@@ -35,13 +39,14 @@ namespace OpenRA.Mods.Common.Traits
 		public object Create(ActorInitializer init) { return new GainsExperience(init, this); }
 	}
 
-	public class GainsExperience : ISync, IResolveOrder
+	public class GainsExperience : INotifyCreated, ISync, IResolveOrder
 	{
 		readonly Actor self;
 		readonly GainsExperienceInfo info;
-		readonly UpgradeManager um;
+		readonly int initialExperience;
 
-		readonly List<Pair<int, string[]>> nextLevel = new List<Pair<int, string[]>>();
+		readonly List<Pair<int, string>> nextLevel = new List<Pair<int, string>>();
+		ConditionManager conditionManager;
 
 		// Stored as a percentage of our value
 		[Sync] int experience = 0;
@@ -54,16 +59,20 @@ namespace OpenRA.Mods.Common.Traits
 			self = init.Self;
 			this.info = info;
 
-			MaxLevel = info.Upgrades.Count;
-
+			MaxLevel = info.Conditions.Count;
 			var cost = self.Info.TraitInfo<ValuedInfo>().Cost;
-			foreach (var kv in info.Upgrades)
+			foreach (var kv in info.Conditions)
 				nextLevel.Add(Pair.New(kv.Key * cost, kv.Value));
 
 			if (init.Contains<ExperienceInit>())
-				GiveExperience(init.Get<ExperienceInit, int>(), info.SuppressLevelupAnimation);
+				initialExperience = init.Get<ExperienceInit, int>();
+		}
 
-			um = self.Trait<UpgradeManager>();
+		void INotifyCreated.Created(Actor self)
+		{
+			conditionManager = self.TraitOrDefault<ConditionManager>();
+			if (initialExperience > 0)
+				GiveExperience(initialExperience, info.SuppressLevelupAnimation);
 		}
 
 		public bool CanGainLevel { get { return Level < MaxLevel; } }
@@ -76,16 +85,17 @@ namespace OpenRA.Mods.Common.Traits
 
 		public void GiveExperience(int amount, bool silent = false)
 		{
+			if (amount < 0)
+				throw new ArgumentException("Revoking experience is not implemented.", "amount");
+
 			experience += amount;
 
 			while (Level < MaxLevel && experience >= nextLevel[Level].First)
 			{
-				var upgrades = nextLevel[Level].Second;
+				if (conditionManager != null)
+					conditionManager.GrantCondition(self, nextLevel[Level].Second);
 
 				Level++;
-
-				foreach (var u in upgrades)
-					um.GrantUpgrade(self, u, this);
 
 				if (!silent)
 				{

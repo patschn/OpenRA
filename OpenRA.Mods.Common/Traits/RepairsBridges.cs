@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -17,7 +17,7 @@ using OpenRA.Traits;
 
 namespace OpenRA.Mods.Common.Traits
 {
-	[Desc("Can enter a BridgeHut to trigger a repair.")]
+	[Desc("Can enter a BridgeHut or LegacyBridgeHut to trigger a repair.")]
 	class RepairsBridgesInfo : ITraitInfo
 	{
 		[VoiceReference] public readonly string Voice = "Action";
@@ -26,7 +26,7 @@ namespace OpenRA.Mods.Common.Traits
 			"Possible values are Exit, Suicide, Dispose.")]
 		public readonly EnterBehaviour EnterBehaviour = EnterBehaviour.Dispose;
 
-		[Desc("Cursor to use when targeting a BridgeHut of an unrepaired bridge.")]
+		[Desc("Cursor to use when targeting an unrepaired bridge.")]
 		public readonly string TargetCursor = "goldwrench";
 
 		[Desc("Cursor to use when repairing is denied.")]
@@ -65,27 +65,40 @@ namespace OpenRA.Mods.Common.Traits
 			if (order.OrderString != "RepairBridge")
 				return null;
 
-			var hut = order.TargetActor.TraitOrDefault<BridgeHut>();
-			if (hut == null)
-				return null;
+			var legacyHut = order.TargetActor.TraitOrDefault<LegacyBridgeHut>();
+			if (legacyHut != null)
+				return legacyHut.BridgeDamageState == DamageState.Undamaged || legacyHut.Repairing || legacyHut.Bridge.IsDangling ? null : info.Voice;
 
-			return hut.BridgeDamageState == DamageState.Undamaged || hut.Repairing || hut.Bridge.IsDangling ? null : info.Voice;
+			var hut = order.TargetActor.TraitOrDefault<BridgeHut>();
+			if (hut != null)
+				return hut.BridgeDamageState == DamageState.Undamaged || hut.Repairing ? null : info.Voice;
+
+			return null;
 		}
 
 		public void ResolveOrder(Actor self, Order order)
 		{
 			if (order.OrderString == "RepairBridge")
 			{
+				var legacyHut = order.TargetActor.TraitOrDefault<LegacyBridgeHut>();
 				var hut = order.TargetActor.TraitOrDefault<BridgeHut>();
-				if (hut == null)
+				if (legacyHut != null)
+				{
+					if (legacyHut.BridgeDamageState == DamageState.Undamaged || legacyHut.Repairing || legacyHut.Bridge.IsDangling)
+						return;
+				}
+				else if (hut != null)
+				{
+					if (hut.BridgeDamageState == DamageState.Undamaged || hut.Repairing)
+						return;
+				}
+				else
 					return;
 
-				if (hut.BridgeDamageState == DamageState.Undamaged || hut.Repairing || hut.Bridge.IsDangling)
-					return;
+				if (!order.Queued)
+					self.CancelActivity();
 
 				self.SetTargetLine(Target.FromOrder(self.World, order), Color.Yellow);
-
-				self.CancelActivity();
 				self.QueueActivity(new RepairBridge(self, order.TargetActor, info.EnterBehaviour, info.RepairNotification));
 			}
 		}
@@ -102,22 +115,36 @@ namespace OpenRA.Mods.Common.Traits
 
 			public override bool CanTargetActor(Actor self, Actor target, TargetModifiers modifiers, ref string cursor)
 			{
-				var hut = target.TraitOrDefault<BridgeHut>();
-				if (hut == null)
-					return false;
-
-				// Require force attack to heal partially damaged bridges to avoid unnecessary cursor noise
-				var damage = hut.BridgeDamageState;
-				if (!modifiers.HasModifier(TargetModifiers.ForceAttack) && damage != DamageState.Dead)
-					return false;
-
 				// Obey force moving onto bridges
 				if (modifiers.HasModifier(TargetModifiers.ForceMove))
 					return false;
 
-				// Can't repair a bridge that is undamaged, already under repair, or dangling
-				if (damage == DamageState.Undamaged || hut.Repairing || hut.Bridge.IsDangling)
-					cursor = info.TargetBlockedCursor;
+				var legacyHut = target.TraitOrDefault<LegacyBridgeHut>();
+				var hut = target.TraitOrDefault<BridgeHut>();
+				if (legacyHut != null)
+				{
+					// Require force attack to heal partially damaged bridges to avoid unnecessary cursor noise
+					var damage = legacyHut.BridgeDamageState;
+					if (!modifiers.HasModifier(TargetModifiers.ForceAttack) && damage != DamageState.Dead)
+						return false;
+
+					// Can't repair a bridge that is undamaged, already under repair, or dangling
+					if (damage == DamageState.Undamaged || legacyHut.Repairing || legacyHut.Bridge.IsDangling)
+						cursor = info.TargetBlockedCursor;
+				}
+				else if (hut != null)
+				{
+					// Require force attack to heal partially damaged bridges to avoid unnecessary cursor noise
+					var damage = hut.BridgeDamageState;
+					if (hut.Info.RequireForceAttackForHeal && !modifiers.HasModifier(TargetModifiers.ForceAttack) && damage != DamageState.Dead)
+						return false;
+
+					// Can't repair a bridge that is undamaged, already under repair, or dangling
+					if (damage == DamageState.Undamaged || hut.Repairing)
+						cursor = info.TargetBlockedCursor;
+				}
+				else
+					return false;
 
 				return true;
 			}

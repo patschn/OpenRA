@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -19,7 +19,7 @@ namespace OpenRA.Mods.Common.Activities
 {
 	public abstract class HarvesterDockSequence : Activity
 	{
-		protected enum State { Wait, Turn, Dock, Loop, Undock, Complete }
+		protected enum DockingState { Wait, Turn, Dock, Loop, Undock, Complete }
 
 		protected readonly Actor Refinery;
 		protected readonly Harvester Harv;
@@ -30,11 +30,11 @@ namespace OpenRA.Mods.Common.Activities
 		protected readonly WPos StartDrag;
 		protected readonly WPos EndDrag;
 
-		protected State dockingState;
+		protected DockingState dockingState;
 
 		public HarvesterDockSequence(Actor self, Actor refinery, int dockAngle, bool isDragRequired, WVec dragOffset, int dragLength)
 		{
-			dockingState = State.Turn;
+			dockingState = DockingState.Turn;
 			Refinery = refinery;
 			DockAngle = dockAngle;
 			IsDragRequired = isDragRequired;
@@ -49,25 +49,25 @@ namespace OpenRA.Mods.Common.Activities
 		{
 			switch (dockingState)
 			{
-				case State.Wait:
+				case DockingState.Wait:
 					return this;
-				case State.Turn:
-					dockingState = State.Dock;
+				case DockingState.Turn:
+					dockingState = DockingState.Dock;
 					if (IsDragRequired)
 						return ActivityUtils.SequenceActivities(new Turn(self, DockAngle), new Drag(self, StartDrag, EndDrag, DragLength), this);
 					return ActivityUtils.SequenceActivities(new Turn(self, DockAngle), this);
-				case State.Dock:
+				case DockingState.Dock:
 					if (Refinery.IsInWorld && !Refinery.IsDead)
 						foreach (var nd in Refinery.TraitsImplementing<INotifyDocking>())
 							nd.Docked(Refinery, self);
 					return OnStateDock(self);
-				case State.Loop:
+				case DockingState.Loop:
 					if (!Refinery.IsInWorld || Refinery.IsDead || Harv.TickUnload(self, Refinery))
-						dockingState = State.Undock;
+						dockingState = DockingState.Undock;
 					return this;
-				case State.Undock:
+				case DockingState.Undock:
 					return OnStateUndock(self);
-				case State.Complete:
+				case DockingState.Complete:
 					if (Refinery.IsInWorld && !Refinery.IsDead)
 						foreach (var nd in Refinery.TraitsImplementing<INotifyDocking>())
 							nd.Undocked(Refinery, self);
@@ -81,10 +81,10 @@ namespace OpenRA.Mods.Common.Activities
 			throw new InvalidOperationException("Invalid harvester dock state");
 		}
 
-		public override void Cancel(Actor self)
+		public override bool Cancel(Actor self, bool keepQueue = false)
 		{
-			dockingState = State.Undock;
-			base.Cancel(self);
+			dockingState = DockingState.Undock;
+			return base.Cancel(self);
 		}
 
 		public override IEnumerable<Target> GetTargets(Actor self)

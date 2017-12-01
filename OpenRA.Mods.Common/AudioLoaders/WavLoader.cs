@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -48,13 +48,14 @@ namespace OpenRA.Mods.Common.AudioLoaders
 		}
 	}
 
-	public class WavFormat : ISoundFormat
+	public sealed class WavFormat : ISoundFormat
 	{
 		public int Channels { get { return reader.Value.Channels; } }
 		public int SampleBits { get { return reader.Value.BitsPerSample; } }
 		public int SampleRate { get { return reader.Value.SampleRate; } }
 		public float LengthInSeconds { get { return WavReader.WaveLength(stream); } }
 		public Stream GetPCMInputStream() { return new MemoryStream(reader.Value.RawOutput); }
+		public void Dispose() { stream.Dispose(); }
 
 		Lazy<WavReader> reader;
 

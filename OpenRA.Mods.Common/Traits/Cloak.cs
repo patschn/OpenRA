@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -29,11 +29,13 @@ namespace OpenRA.Mods.Common.Traits
 		Infiltrate = 8,
 		Demolish = 16,
 		Damage = 32,
-		Dock = 64
+		Heal = 64,
+		SelfHeal = 128,
+		Dock = 256
 	}
 
 	[Desc("This unit can cloak and uncloak in specific situations.")]
-	public class CloakInfo : UpgradableTraitInfo
+	public class CloakInfo : ConditionalTraitInfo
 	{
 		[Desc("Measured in game ticks.")]
 		public readonly int InitialDelay = 10;
@@ -41,7 +43,7 @@ namespace OpenRA.Mods.Common.Traits
 		[Desc("Measured in game ticks.")]
 		public readonly int CloakDelay = 30;
 
-		[Desc("Events leading to the actor getting uncloaked. Possible values are: Attack, Move, Unload, Infiltrate, Demolish, Dock and Damage")]
+		[Desc("Events leading to the actor getting uncloaked. Possible values are: Attack, Move, Unload, Infiltrate, Demolish, Dock, Damage, Heal and SelfHeal.")]
 		public readonly UncloakType UncloakOn = UncloakType.Attack
 			| UncloakType.Unload | UncloakType.Infiltrate | UncloakType.Demolish | UncloakType.Dock;
 
@@ -53,23 +55,24 @@ namespace OpenRA.Mods.Common.Traits
 
 		public readonly HashSet<string> CloakTypes = new HashSet<string> { "Cloak" };
 
-		[UpgradeGrantedReference]
-		[Desc("The upgrades to grant to self while cloaked.")]
-		public readonly string[] WhileCloakedUpgrades = { };
+		[GrantedConditionReference]
+		[Desc("The condition to grant to self while cloaked.")]
+		public readonly string CloakedCondition = null;
 
 		public override object Create(ActorInitializer init) { return new Cloak(this); }
 	}
 
-	public class Cloak : UpgradableTrait<CloakInfo>, IRenderModifier, INotifyDamageStateChanged,
+	public class Cloak : ConditionalTrait<CloakInfo>, IRenderModifier, INotifyDamage,
 	INotifyAttack, ITick, IVisibilityModifier, IRadarColorModifier, INotifyCreated, INotifyHarvesterAction
 	{
 		[Sync] int remainingTime;
-		[Sync] bool damageDisabled;
 		bool isDocking;
-		UpgradeManager upgradeManager;
+		ConditionManager conditionManager;
 
 		CPos? lastPos;
 		bool wasCloaked = false;
+		bool firstTick = true;
+		int cloakedToken = ConditionManager.InvalidConditionToken;
 
 		public Cloak(CloakInfo info)
 			: base(info)
@@ -77,17 +80,18 @@ namespace OpenRA.Mods.Common.Traits
 			remainingTime = info.InitialDelay;
 		}
 
-		void INotifyCreated.Created(Actor self)
+		protected override void Created(Actor self)
 		{
-			upgradeManager = self.TraitOrDefault<UpgradeManager>();
+			conditionManager = self.TraitOrDefault<ConditionManager>();
 
-			// The upgrade manager exists, but may not have finished being created yet.
-			// We'll defer the upgrades until the end of the tick, at which point it will be ready.
 			if (Cloaked)
 			{
 				wasCloaked = true;
-				self.World.AddFrameEndTask(_ => GrantUpgrades(self));
+				if (conditionManager != null && cloakedToken == ConditionManager.InvalidConditionToken && !string.IsNullOrEmpty(Info.CloakedCondition))
+					cloakedToken = conditionManager.GrantCondition(self, Info.CloakedCondition);
 			}
+
+			base.Created(self);
 		}
 
 		public bool Cloaked { get { return !IsTraitDisabled && remainingTime <= 0; } }
@@ -100,10 +104,15 @@ namespace OpenRA.Mods.Common.Traits
 
 		void INotifyAttack.PreparingAttack(Actor self, Target target, Armament a, Barrel barrel) { }
 
-		void INotifyDamageStateChanged.DamageStateChanged(Actor self, AttackInfo e)
+		void INotifyDamage.Damaged(Actor self, AttackInfo e)
 		{
-			damageDisabled = e.DamageState >= DamageState.Critical;
-			if (damageDisabled || Info.UncloakOn.HasFlag(UncloakType.Damage))
+			if (e.Damage.Value == 0)
+				return;
+
+			var type = e.Damage.Value < 0
+				? (e.Attacker == self ? UncloakType.SelfHeal : UncloakType.Heal)
+				: UncloakType.Damage;
+			if (Info.UncloakOn.HasFlag(type))
 				Uncloak();
 		}
 
@@ -128,7 +137,7 @@ namespace OpenRA.Mods.Common.Traits
 		{
 			if (!IsTraitDisabled)
 			{
-				if (remainingTime > 0 && !damageDisabled && !isDocking)
+				if (remainingTime > 0 && !isDocking)
 					remainingTime--;
 
 				if (self.IsDisabled())
@@ -144,18 +153,24 @@ namespace OpenRA.Mods.Common.Traits
 			var isCloaked = Cloaked;
 			if (isCloaked && !wasCloaked)
 			{
-				GrantUpgrades(self);
-				if (!self.TraitsImplementing<Cloak>().Any(a => a != this && a.Cloaked))
-					Game.Sound.Play(Info.CloakSound, self.CenterPosition);
+				if (conditionManager != null && cloakedToken == ConditionManager.InvalidConditionToken && !string.IsNullOrEmpty(Info.CloakedCondition))
+					cloakedToken = conditionManager.GrantCondition(self, Info.CloakedCondition);
+
+				// Sounds shouldn't play if the actor starts cloaked
+				if (!(firstTick && Info.InitialDelay == 0) && !self.TraitsImplementing<Cloak>().Any(a => a != this && a.Cloaked))
+					Game.Sound.Play(SoundType.World, Info.CloakSound, self.CenterPosition);
 			}
 			else if (!isCloaked && wasCloaked)
 			{
-				RevokeUpgrades(self);
-				if (!self.TraitsImplementing<Cloak>().Any(a => a != this && a.Cloaked))
-					Game.Sound.Play(Info.UncloakSound, self.CenterPosition);
+				if (cloakedToken != ConditionManager.InvalidConditionToken)
+					cloakedToken = conditionManager.RevokeCondition(self, cloakedToken);
+
+				if (!(firstTick && Info.InitialDelay == 0) && !self.TraitsImplementing<Cloak>().Any(a => a != this && a.Cloaked))
+					Game.Sound.Play(SoundType.World, Info.UncloakSound, self.CenterPosition);
 			}
 
 			wasCloaked = isCloaked;
+			firstTick = false;
 		}
 
 		public bool IsVisible(Actor self, Player viewer)
@@ -174,20 +189,6 @@ namespace OpenRA.Mods.Common.Traits
 				color = Color.FromArgb(128, color);
 
 			return color;
-		}
-
-		void GrantUpgrades(Actor self)
-		{
-			if (upgradeManager != null)
-				foreach (var u in Info.WhileCloakedUpgrades)
-					upgradeManager.GrantUpgrade(self, u, this);
-		}
-
-		void RevokeUpgrades(Actor self)
-		{
-			if (upgradeManager != null)
-				foreach (var u in Info.WhileCloakedUpgrades)
-					upgradeManager.RevokeUpgrade(self, u, this);
 		}
 
 		void INotifyHarvesterAction.MovingToResources(Actor self, CPos targetCell, Activity next) { }

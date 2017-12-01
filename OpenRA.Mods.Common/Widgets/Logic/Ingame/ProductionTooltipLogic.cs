@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -13,6 +13,7 @@ using System;
 using System.Drawing;
 using System.Linq;
 using OpenRA.Mods.Common.Traits;
+using OpenRA.Support;
 using OpenRA.Traits;
 using OpenRA.Widgets;
 
@@ -21,13 +22,14 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 	public class ProductionTooltipLogic : ChromeLogic
 	{
 		[ObjectCreator.UseCtor]
-		public ProductionTooltipLogic(Widget widget, TooltipContainerWidget tooltipContainer, ProductionPaletteWidget palette, World world)
+		public ProductionTooltipLogic(Widget widget, TooltipContainerWidget tooltipContainer, Player player, Func<ProductionIcon> getTooltipIcon)
 		{
-			var mapRules = palette.World.Map.Rules;
-			var pm = palette.World.LocalPlayer.PlayerActor.Trait<PowerManager>();
-			var pr = palette.World.LocalPlayer.PlayerActor.Trait<PlayerResources>();
+			var world = player.World;
+			var mapRules = world.Map.Rules;
+			var pm = player.PlayerActor.Trait<PowerManager>();
+			var pr = player.PlayerActor.Trait<PlayerResources>();
 
-			widget.IsVisible = () => palette.TooltipIcon != null;
+			widget.IsVisible = () => getTooltipIcon() != null && getTooltipIcon().Actor != null;
 			var nameLabel = widget.Get<LabelWidget>("NAME");
 			var hotkeyLabel = widget.Get<LabelWidget>("HOTKEY");
 			var requiresLabel = widget.Get<LabelWidget>("REQUIRES");
@@ -48,21 +50,23 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 
 			tooltipContainer.BeforeRender = () =>
 			{
-				if (palette.TooltipIcon == null)
+				var tooltipIcon = getTooltipIcon();
+				if (tooltipIcon == null)
 					return;
 
-				var actor = palette.TooltipIcon.Actor;
+				var actor = tooltipIcon.Actor;
 				if (actor == null || actor == lastActor)
 					return;
 
-				var tooltip = actor.TraitInfo<TooltipInfo>();
+				var tooltip = actor.TraitInfos<TooltipInfo>().FirstOrDefault(Exts.IsTraitEnabled);
+				var name = tooltip != null ? tooltip.Name : actor.Name;
 				var buildable = actor.TraitInfo<BuildableInfo>();
 				var cost = actor.TraitInfo<ValuedInfo>().Cost;
 
-				nameLabel.GetText = () => tooltip.Name;
+				nameLabel.GetText = () => name;
 
-				var hotkey = palette.TooltipIcon.Hotkey;
-				var nameWidth = font.Measure(tooltip.Name).X;
+				var hotkey = tooltipIcon.Hotkey;
+				var nameWidth = font.Measure(name).X;
 				var hotkeyText = "({0})".F(hotkey.DisplayString());
 				var hotkeyWidth = hotkey.IsValid() ? font.Measure(hotkeyText).X + 2 * nameLabel.Bounds.X : 0;
 				hotkeyLabel.GetText = () => hotkeyText;
@@ -73,7 +77,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 				var requiresString = prereqs.Any() ? requiresLabel.Text.F(prereqs.JoinWith(", ")) : "";
 				requiresLabel.GetText = () => requiresString;
 
-				var power = actor.TraitInfos<PowerInfo>().Where(i => i.UpgradeMinEnabledLevel < 1).Sum(i => i.Amount);
+				var power = actor.TraitInfos<PowerInfo>().Where(i => i.EnabledByDefault).Sum(i => i.Amount);
 				var powerString = power.ToString();
 				powerLabel.GetText = () => powerString;
 				powerLabel.GetColor = () => ((pm.PowerProvided - pm.PowerDrained) >= -power || power > 0)
@@ -82,8 +86,8 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 				powerIcon.IsVisible = () => power != 0;
 
 				var lowpower = pm.PowerState != PowerState.Normal;
-				var time = palette.CurrentQueue == null ? 0 : palette.CurrentQueue.GetBuildTime(actor, buildable)
-					* (lowpower ? palette.CurrentQueue.Info.LowPowerSlowdown : 1);
+				var time = tooltipIcon.ProductionQueue == null ? 0 : tooltipIcon.ProductionQueue.GetBuildTime(actor, buildable)
+					* (lowpower ? tooltipIcon.ProductionQueue.Info.LowPowerSlowdown : 1);
 				var timeString = WidgetUtils.FormatTime(time, world.Timestep);
 				timeLabel.GetText = () => timeString;
 				timeLabel.GetColor = () => lowpower ? Color.Red : Color.White;
@@ -93,7 +97,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 				costLabel.GetColor = () => pr.Cash + pr.Resources >= cost
 					? Color.White : Color.Red;
 
-				var descString = tooltip.Description.Replace("\\n", "\n");
+				var descString = buildable.Description.Replace("\\n", "\n");
 				descLabel.GetText = () => descString;
 
 				var leftWidth = new[] { nameWidth + hotkeyWidth, requiresFont.Measure(requiresString).X, descFont.Measure(descString).X }.Aggregate(Math.Max);
@@ -103,7 +107,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 				timeLabel.Bounds.X = powerLabel.Bounds.X = costLabel.Bounds.X = timeIcon.Bounds.Right + iconMargin;
 				widget.Bounds.Width = leftWidth + rightWidth + 3 * nameLabel.Bounds.X + timeIcon.Bounds.Width + iconMargin;
 
-				var leftHeight = font.Measure(tooltip.Name).Y + requiresFont.Measure(requiresString).Y + descFont.Measure(descString).Y;
+				var leftHeight = font.Measure(name).Y + requiresFont.Measure(requiresString).Y + descFont.Measure(descString).Y;
 				var rightHeight = font.Measure(powerString).Y + font.Measure(timeString).Y + font.Measure(costString).Y;
 				widget.Bounds.Height = Math.Max(leftHeight, rightHeight) * 3 / 2 + 3 * nameLabel.Bounds.Y;
 
@@ -114,8 +118,12 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 		static string ActorName(Ruleset rules, string a)
 		{
 			ActorInfo ai;
-			if (rules.Actors.TryGetValue(a.ToLowerInvariant(), out ai) && ai.HasTraitInfo<TooltipInfo>())
-				return ai.TraitInfo<TooltipInfo>().Name;
+			if (rules.Actors.TryGetValue(a.ToLowerInvariant(), out ai))
+			{
+				var actorTooltip = ai.TraitInfos<TooltipInfo>().FirstOrDefault(Exts.IsTraitEnabled);
+				if (actorTooltip != null)
+					return actorTooltip.Name;
+			}
 
 			return a;
 		}

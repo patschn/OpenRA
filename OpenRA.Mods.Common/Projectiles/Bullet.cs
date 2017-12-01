@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -12,6 +12,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Linq;
 using OpenRA.Effects;
 using OpenRA.GameRules;
 using OpenRA.Graphics;
@@ -22,7 +23,7 @@ using OpenRA.Traits;
 
 namespace OpenRA.Mods.Common.Projectiles
 {
-	public class BulletInfo : IProjectileInfo
+	public class BulletInfo : IProjectileInfo, IRulesetLoaded<WeaponInfo>
 	{
 		[Desc("Projectile speed in WDist / tick, two values indicate variable velocity.")]
 		public readonly WDist[] Speed = { new WDist(17) };
@@ -57,17 +58,27 @@ namespace OpenRA.Mods.Common.Projectiles
 		[Desc("Width of projectile (used for finding blocking actors).")]
 		public readonly WDist Width = new WDist(1);
 
-		[Desc("Extra search radius beyond path for blocking actors.")]
-		public readonly WDist TargetExtraSearchRadius = new WDist(1536);
-
 		[Desc("Arc in WAngles, two values indicate variable arc.")]
-		public readonly WAngle[] Angle = { WAngle.Zero };
+		public readonly WAngle[] LaunchAngle = { WAngle.Zero };
+
+		[Desc("Up to how many times does this bullet bounce when touching ground without hitting a target.",
+			"0 implies exploding on contact with the originally targeted position.")]
+		public readonly int BounceCount = 0;
+
+		[Desc("Modify distance of each bounce by this percentage of previous distance.")]
+		public readonly int BounceRangeModifier = 60;
+
+		[Desc("If projectile touches an actor with one of these stances during or after the first bounce, trigger explosion.")]
+		public readonly Stance ValidBounceBlockerStances = Stance.Enemy | Stance.Neutral;
 
 		[Desc("Interval in ticks between each spawned Trail animation.")]
 		public readonly int TrailInterval = 2;
 
 		[Desc("Delay in ticks until trail animation is spawned.")]
 		public readonly int TrailDelay = 1;
+
+		[Desc("Altitude above terrain below which to explode. Zero effectively deactivates airburst.")]
+		public readonly WDist AirburstAltitude = WDist.Zero;
 
 		[Desc("Palette used to render the trail sequence.")]
 		[PaletteReference("TrailUsePlayerPalette")] public readonly string TrailPalette = "effect";
@@ -82,7 +93,24 @@ namespace OpenRA.Mods.Common.Projectiles
 		public readonly int ContrailDelay = 1;
 		public readonly WDist ContrailWidth = new WDist(64);
 
+		[Desc("Scan radius for actors with projectile-blocking trait. If set to a negative value (default), it will automatically scale",
+			"to the blocker with the largest health shape. Only set custom values if you know what you're doing.")]
+		public WDist BlockerScanRadius = new WDist(-1);
+
+		[Desc("Extra search radius beyond path for actors with ValidBounceBlockerStances. If set to a negative value (default), ",
+			"it will automatically scale to the largest health shape. Only set custom values if you know what you're doing.")]
+		public WDist BounceBlockerScanRadius = new WDist(-1);
+
 		public IProjectile Create(ProjectileArgs args) { return new Bullet(this, args); }
+
+		void IRulesetLoaded<WeaponInfo>.RulesetLoaded(Ruleset rules, WeaponInfo wi)
+		{
+			if (BlockerScanRadius < WDist.Zero)
+				BlockerScanRadius = Util.MinimumRequiredBlockerScanRadius(rules);
+
+			if (BounceBlockerScanRadius < WDist.Zero)
+				BounceBlockerScanRadius = Util.MinimumRequiredVictimScanRadius(rules);
+		}
 	}
 
 	public class Bullet : IProjectile, ISync
@@ -96,25 +124,27 @@ namespace OpenRA.Mods.Common.Projectiles
 		ContrailRenderable contrail;
 		string trailPalette;
 
-		[Sync] WPos pos, target;
-		[Sync] int length;
+		[Sync] WPos pos, target, source;
+		int length;
 		[Sync] int facing;
-		[Sync] int ticks, smokeTicks;
+		int ticks, smokeTicks;
+		int remainingBounces;
 
-		[Sync] public Actor SourceActor { get { return args.SourceActor; } }
+		public Actor SourceActor { get { return args.SourceActor; } }
 
 		public Bullet(BulletInfo info, ProjectileArgs args)
 		{
 			this.info = info;
 			this.args = args;
 			pos = args.Source;
+			source = args.Source;
 
 			var world = args.SourceActor.World;
 
-			if (info.Angle.Length > 1)
-				angle = new WAngle(world.SharedRandom.Next(info.Angle[0].Angle, info.Angle[1].Angle));
+			if (info.LaunchAngle.Length > 1)
+				angle = new WAngle(world.SharedRandom.Next(info.LaunchAngle[0].Angle, info.LaunchAngle[1].Angle));
 			else
-				angle = info.Angle[0];
+				angle = info.LaunchAngle[0];
 
 			if (info.Speed.Length > 1)
 				speed = new WDist(world.SharedRandom.Next(info.Speed[0].Length, info.Speed[1].Length));
@@ -129,6 +159,9 @@ namespace OpenRA.Mods.Common.Projectiles
 				var maxOffset = inaccuracy * (target - pos).Length / range;
 				target += WVec.FromPDF(world.SharedRandom, 2) * maxOffset / 1024;
 			}
+
+			if (info.AirburstAltitude > WDist.Zero)
+				target += new WVec(WDist.Zero, WDist.Zero, info.AirburstAltitude);
 
 			facing = (target - pos).Yaw.Facing;
 			length = Math.Max((target - pos).Length / speed.Length, 1);
@@ -150,6 +183,7 @@ namespace OpenRA.Mods.Common.Projectiles
 				trailPalette += args.SourceActor.Owner.InternalName;
 
 			smokeTicks = info.TrailDelay;
+			remainingBounces = info.BounceCount;
 		}
 
 		int GetEffectiveFacing()
@@ -171,13 +205,13 @@ namespace OpenRA.Mods.Common.Projectiles
 				anim.Tick();
 
 			var lastPos = pos;
-			pos = WPos.LerpQuadratic(args.Source, target, angle, ticks, length);
+			pos = WPos.LerpQuadratic(source, target, angle, ticks, length);
 
 			// Check for walls or other blocking obstacles
 			var shouldExplode = false;
 			WPos blockedPos;
 			if (info.Blockable && BlocksProjectiles.AnyBlockingActorsBetween(world, lastPos, pos, info.Width,
-				info.TargetExtraSearchRadius, out blockedPos))
+				info.BlockerScanRadius, out blockedPos))
 			{
 				pos = blockedPos;
 				shouldExplode = true;
@@ -185,7 +219,7 @@ namespace OpenRA.Mods.Common.Projectiles
 
 			if (!string.IsNullOrEmpty(info.TrailImage) && --smokeTicks < 0)
 			{
-				var delayedPos = WPos.LerpQuadratic(args.Source, target, angle, ticks - info.TrailDelay, length);
+				var delayedPos = WPos.LerpQuadratic(source, target, angle, ticks - info.TrailDelay, length);
 				world.AddFrameEndTask(w => w.Add(new SpriteEffect(delayedPos, w, info.TrailImage, info.TrailSequences.Random(world.SharedRandom),
 					trailPalette, false, false, GetEffectiveFacing())));
 
@@ -195,8 +229,30 @@ namespace OpenRA.Mods.Common.Projectiles
 			if (info.ContrailLength > 0)
 				contrail.Update(pos);
 
+			var flightLengthReached = ticks++ >= length;
+			var shouldBounce = remainingBounces > 0;
+
+			if (flightLengthReached && shouldBounce)
+			{
+				shouldExplode |= AnyValidTargetsInRadius(world, pos, info.Width + info.BounceBlockerScanRadius, args.SourceActor, true);
+				target += (pos - source) * info.BounceRangeModifier / 100;
+				var dat = world.Map.DistanceAboveTerrain(target);
+				target += new WVec(0, 0, -dat.Length);
+				length = Math.Max((target - pos).Length / speed.Length, 1);
+				ticks = 0;
+				source = pos;
+				remainingBounces--;
+			}
+
 			// Flight length reached / exceeded
-			shouldExplode |= ticks++ >= length;
+			shouldExplode |= flightLengthReached && !shouldBounce;
+
+			// Driving into cell with higher height level
+			shouldExplode |= world.Map.DistanceAboveTerrain(pos).Length < 0;
+
+			// After first bounce, check for targets each tick
+			if (remainingBounces < info.BounceCount)
+				shouldExplode |= AnyValidTargetsInRadius(world, pos, info.Width + info.BounceBlockerScanRadius, args.SourceActor, true);
 
 			if (shouldExplode)
 				Explode(world);
@@ -235,6 +291,25 @@ namespace OpenRA.Mods.Common.Projectiles
 			world.AddFrameEndTask(w => w.Remove(this));
 
 			args.Weapon.Impact(Target.FromPos(pos), args.SourceActor, args.DamageModifiers);
+		}
+
+		bool AnyValidTargetsInRadius(World world, WPos pos, WDist radius, Actor firedBy, bool checkTargetType)
+		{
+			foreach (var victim in world.FindActorsInCircle(pos, radius))
+			{
+				if (checkTargetType && !Target.FromActor(victim).IsValidFor(firedBy))
+					continue;
+
+				if (!info.ValidBounceBlockerStances.HasStance(victim.Owner.Stances[firedBy.Owner]))
+					continue;
+
+				// If the impact position is within any actor's HitShape, we have a direct hit
+				var activeShapes = victim.TraitsImplementing<HitShape>().Where(Exts.IsTraitEnabled);
+				if (activeShapes.Any(i => i.Info.Type.DistanceFromEdge(pos, victim).Length <= 0))
+					return true;
+			}
+
+			return false;
 		}
 	}
 }

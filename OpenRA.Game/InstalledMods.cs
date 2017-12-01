@@ -1,6 +1,6 @@
-﻿#region Copyright & License Information
+#region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -12,9 +12,11 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Drawing;
 using System.IO;
 using System.Linq;
 using OpenRA.FileSystem;
+using OpenRA.Graphics;
 using OpenRA.Primitives;
 
 namespace OpenRA
@@ -22,86 +24,94 @@ namespace OpenRA
 	public class InstalledMods : IReadOnlyDictionary<string, Manifest>
 	{
 		readonly Dictionary<string, Manifest> mods;
+		readonly SheetBuilder sheetBuilder;
 
-		public InstalledMods(string customModPath)
+		readonly Dictionary<string, Sprite> icons = new Dictionary<string, Sprite>();
+		public readonly IReadOnlyDictionary<string, Sprite> Icons;
+
+		/// <summary>Initializes the collection of locally installed mods.</summary>
+		/// <param name="searchPaths">Filesystem paths to search for mod packages.</param>
+		/// <param name="explicitPaths">Filesystem paths to additional mod packages.</param>
+		public InstalledMods(IEnumerable<string> searchPaths, IEnumerable<string> explicitPaths)
 		{
-			mods = GetInstalledMods(customModPath);
+			sheetBuilder = new SheetBuilder(SheetType.BGRA, 256);
+			Icons = new ReadOnlyDictionary<string, Sprite>(icons);
+			mods = GetInstalledMods(searchPaths, explicitPaths);
 		}
 
-		static IEnumerable<Pair<string, string>> GetCandidateMods()
+		static IEnumerable<Pair<string, string>> GetCandidateMods(IEnumerable<string> searchPaths)
 		{
-			// Get mods that are in the game folder.
-			var basePath = Platform.ResolvePath(Path.Combine(".", "mods"));
-			var mods = Directory.GetDirectories(basePath)
-				.Select(x => Pair.New(x.Substring(basePath.Length + 1), x))
-				.ToList();
+			var mods = new List<Pair<string, string>>();
+			foreach (var path in searchPaths)
+			{
+				try
+				{
+					var resolved = Platform.ResolvePath(path);
+					if (!Directory.Exists(resolved))
+						continue;
 
-			foreach (var m in Directory.GetFiles(basePath, "*.oramod"))
-				mods.Add(Pair.New(Path.GetFileNameWithoutExtension(m), m));
-
-			// Get mods that are in the support folder.
-			var supportPath = Platform.ResolvePath(Path.Combine("^", "mods"));
-			if (!Directory.Exists(supportPath))
-				return mods;
-
-			foreach (var pair in Directory.GetDirectories(supportPath).ToDictionary(x => x.Substring(supportPath.Length + 1)))
-				mods.Add(Pair.New(pair.Key, pair.Value));
-
-			foreach (var m in Directory.GetFiles(supportPath, "*.oramod"))
-				mods.Add(Pair.New(Path.GetFileNameWithoutExtension(m), m));
+					var directory = new DirectoryInfo(resolved);
+					foreach (var subdir in directory.EnumerateDirectories())
+						mods.Add(Pair.New(subdir.Name, subdir.FullName));
+				}
+				catch (Exception e)
+				{
+					Console.WriteLine("Failed to enumerate mod search path {0}: {1}", path, e.Message);
+				}
+			}
 
 			return mods;
 		}
 
-		static Manifest LoadMod(string id, string path)
+		Manifest LoadMod(string id, string path)
 		{
 			IReadOnlyPackage package = null;
 			try
 			{
-				if (Directory.Exists(path))
-					package = new Folder(path);
-				else
+				if (!Directory.Exists(path))
 				{
-					try
-					{
-						using (var fileStream = File.OpenRead(path))
-							package = new ZipFile(fileStream, path);
-					}
-					catch
-					{
-						throw new InvalidDataException(path + " is not a valid mod package");
-					}
+					Log.Write("debug", path + " is not a valid mod package");
+					return null;
 				}
 
-				if (!package.Contains("mod.yaml"))
-					throw new InvalidDataException(path + " is not a valid mod package");
+				package = new Folder(path);
+				if (package.Contains("mod.yaml"))
+				{
+					var manifest = new Manifest(id, package);
 
-				// Mods in the support directory and oramod packages (which are listed later
-				// in the CandidateMods list) override mods in the main install.
-				return new Manifest(id, package);
+					if (package.Contains("icon.png"))
+					{
+						using (var stream = package.GetStream("icon.png"))
+							if (stream != null)
+								using (var bitmap = new Bitmap(stream))
+									icons[id] = sheetBuilder.Add(bitmap);
+					}
+					else if (!manifest.Metadata.Hidden)
+						Log.Write("debug", "Mod '{0}' is missing 'icon.png'.".F(path));
+
+					return manifest;
+				}
 			}
-			catch (Exception)
+			catch (Exception e)
 			{
-				if (package != null)
-					package.Dispose();
-
-				return null;
+				Log.Write("debug", "Load mod '{0}': {1}".F(path, e));
 			}
+
+			if (package != null)
+				package.Dispose();
+
+			return null;
 		}
 
-		static Dictionary<string, Manifest> GetInstalledMods(string customModPath)
+		Dictionary<string, Manifest> GetInstalledMods(IEnumerable<string> searchPaths, IEnumerable<string> explicitPaths)
 		{
 			var ret = new Dictionary<string, Manifest>();
-			var candidates = GetCandidateMods();
-			if (customModPath != null)
-				candidates = candidates.Append(Pair.New(Path.GetFileNameWithoutExtension(customModPath), customModPath));
+			var candidates = GetCandidateMods(searchPaths)
+				.Concat(explicitPaths.Select(p => Pair.New(Path.GetFileNameWithoutExtension(p), p)));
 
 			foreach (var pair in candidates)
 			{
 				var mod = LoadMod(pair.First, pair.Second);
-
-				// Mods in the support directory and oramod packages (which are listed later
-				// in the CandidateMods list) override mods in the main install.
 				if (mod != null)
 					ret[pair.First] = mod;
 			}

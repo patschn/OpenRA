@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -33,7 +33,7 @@ namespace OpenRA.Mods.Common.Traits
 		/// Calculates a path for the actor from source to destination
 		/// </summary>
 		/// <returns>A path from start to target</returns>
-		List<CPos> FindUnitPath(CPos source, CPos target, Actor self);
+		List<CPos> FindUnitPath(CPos source, CPos target, Actor self, Actor ignoreActor);
 
 		List<CPos> FindUnitPathToRange(CPos source, SubCell srcSub, WPos target, WDist range, Actor self);
 
@@ -60,7 +60,7 @@ namespace OpenRA.Mods.Common.Traits
 			this.world = world;
 		}
 
-		public List<CPos> FindUnitPath(CPos source, CPos target, Actor self)
+		public List<CPos> FindUnitPath(CPos source, CPos target, Actor self, Actor ignoreActor)
 		{
 			var mi = self.Info.TraitInfo<MobileInfo>();
 
@@ -69,13 +69,13 @@ namespace OpenRA.Mods.Common.Traits
 			if (domainIndex != null)
 			{
 				var passable = mi.GetMovementClass(world.Map.Rules.TileSet);
-				if (!domainIndex.IsPassable(source, target, (uint)passable))
+				if (!domainIndex.IsPassable(source, target, mi, (uint)passable))
 					return EmptyPath;
 			}
 
 			List<CPos> pb;
-			using (var fromSrc = PathSearch.FromPoint(world, mi, self, target, source, true))
-			using (var fromDest = PathSearch.FromPoint(world, mi, self, source, target, true).Reverse())
+			using (var fromSrc = PathSearch.FromPoint(world, mi, self, target, source, true).WithIgnoredActor(ignoreActor))
+			using (var fromDest = PathSearch.FromPoint(world, mi, self, source, target, true).WithIgnoredActor(ignoreActor).Reverse())
 				pb = FindBidiPath(fromSrc, fromDest);
 
 			CheckSanePath2(pb, source, target);
@@ -103,7 +103,7 @@ namespace OpenRA.Mods.Common.Traits
 			if (domainIndex != null)
 			{
 				var passable = mi.GetMovementClass(world.Map.Rules.TileSet);
-				tilesInRange = new List<CPos>(tilesInRange.Where(t => domainIndex.IsPassable(source, t, (uint)passable)));
+				tilesInRange = new List<CPos>(tilesInRange.Where(t => domainIndex.IsPassable(source, t, mi, (uint)passable)));
 				if (!tilesInRange.Any())
 					return EmptyPath;
 			}

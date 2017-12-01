@@ -153,3 +153,6 @@ ORCA.IN:
 	RenderSprites:
 		Image: ORCA
 	-AutoTarget:
+	-AutoTargetPriority@DEFAULT:
+	-AutoTargetPriority@ATTACKANYTHING:
+	-AttackMove:

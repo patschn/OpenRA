@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -85,6 +85,14 @@ namespace OpenRA.Mods.Common.Traits.Render
 
 	public class RenderSprites : IRender, ITick, INotifyOwnerChanged, INotifyEffectiveOwnerChanged, IActorPreviewInitModifier
 	{
+		static readonly Pair<DamageState, string>[] DamagePrefixes =
+		{
+			Pair.New(DamageState.Critical, "critical-"),
+			Pair.New(DamageState.Heavy, "damaged-"),
+			Pair.New(DamageState.Medium, "scratched-"),
+			Pair.New(DamageState.Light, "scuffed-")
+		};
+
 		class AnimationWrapper
 		{
 			public readonly AnimationWithOffset Animation;
@@ -196,27 +204,27 @@ namespace OpenRA.Mods.Common.Traits.Render
 			anims.RemoveAll(a => a.Animation == anim);
 		}
 
-		public static string NormalizeSequence(Animation anim, DamageState state, string sequence)
+		public static string UnnormalizeSequence(string sequence)
 		{
-			var states = new Pair<DamageState, string>[]
-			{
-				Pair.New(DamageState.Critical, "critical-"),
-				Pair.New(DamageState.Heavy, "damaged-"),
-				Pair.New(DamageState.Medium, "scratched-"),
-				Pair.New(DamageState.Light, "scuffed-")
-			};
-
 			// Remove existing damage prefix
-			foreach (var s in states)
+			foreach (var s in DamagePrefixes)
 			{
-				if (sequence.StartsWith(s.Second))
+				if (sequence.StartsWith(s.Second, StringComparison.Ordinal))
 				{
 					sequence = sequence.Substring(s.Second.Length);
 					break;
 				}
 			}
 
-			foreach (var s in states)
+			return sequence;
+		}
+
+		public static string NormalizeSequence(Animation anim, DamageState state, string sequence)
+		{
+			// Remove any existing damage prefix
+			sequence = UnnormalizeSequence(sequence);
+
+			foreach (var s in DamagePrefixes)
 				if (state >= s.First && anim.HasSequence(s.Second + sequence))
 					return s.Second + sequence;
 

@@ -1,6 +1,6 @@
-﻿#region Copyright & License Information
+#region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -15,7 +15,7 @@ using OpenRA.Traits;
 namespace OpenRA.Mods.Common.Traits
 {
 	[Desc("Wanders around aimlessly while idle.")]
-	public class WandersInfo : UpgradableTraitInfo, Requires<IMoveInfo>
+	public class WandersInfo : ConditionalTraitInfo, Requires<IMoveInfo>
 	{
 		public readonly int WanderMoveRadius = 1;
 
@@ -31,7 +31,7 @@ namespace OpenRA.Mods.Common.Traits
 		public override object Create(ActorInitializer init) { return new Wanders(init.Self, this); }
 	}
 
-	public class Wanders : UpgradableTrait<WandersInfo>, INotifyCreated, INotifyIdle, INotifyBecomingIdle
+	public class Wanders : ConditionalTrait<WandersInfo>, INotifyIdle, INotifyBecomingIdle
 	{
 		readonly Actor self;
 		readonly WandersInfo info;
@@ -50,9 +50,11 @@ namespace OpenRA.Mods.Common.Traits
 			effectiveMoveRadius = info.WanderMoveRadius;
 		}
 
-		void INotifyCreated.Created(Actor self)
+		protected override void Created(Actor self)
 		{
 			move = self.Trait<IMove>() as IResolveOrder;
+
+			base.Created(self);
 		}
 
 		public virtual void OnBecomingIdle(Actor self)

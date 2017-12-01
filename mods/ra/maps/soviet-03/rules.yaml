@@ -17,7 +17,8 @@ World:
 		Default: easy
 
 ^TechBuilding:
-	AutoTargetIgnore:
+	Targetable:
+		TargetTypes: Ground, C4, DetonateAttack, Structure, NoAutoTarget
 
 ^Infantry:
 	-GivesBounty:
@@ -57,7 +58,13 @@ V05:
 		Actor: healcrate
 
 DOG:
+	# HACK: Disable experience without killing the linter
 	-GainsExperience:
+	ExternalCondition@RANK-VETERAN:
+		Condition: rank-veteran
+	ExternalCondition@RANK-ELITE:
+		Condition: rank-elite
+	-GrantCondition@RANK-ELITE:
 
 SPY:
 	Mobile:

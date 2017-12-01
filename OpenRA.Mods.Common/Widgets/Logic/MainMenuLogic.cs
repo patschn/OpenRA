@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -13,6 +13,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -37,7 +38,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 		static bool fetchedNews;
 
 		// Increment the version number when adding new stats
-		const int SystemInformationVersion = 1;
+		const int SystemInformationVersion = 3;
 		Dictionary<string, Pair<string, string>> GetSystemInformation()
 		{
 			var lang = System.Globalization.CultureInfo.InstalledUICulture.TwoLetterISOLanguageName;
@@ -46,8 +47,12 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 				{ "id", Pair.New("Anonymous ID", Game.Settings.Debug.UUID) },
 				{ "platform", Pair.New("OS Type", Platform.CurrentPlatform.ToString()) },
 				{ "os", Pair.New("OS Version", Environment.OSVersion.ToString()) },
+				{ "x64", Pair.New("OS is 64 bit", Environment.Is64BitOperatingSystem.ToString()) },
+				{ "x64process", Pair.New("Process is 64 bit", Environment.Is64BitProcess.ToString()) },
 				{ "runtime", Pair.New(".NET Runtime", Platform.RuntimeVersion) },
 				{ "gl", Pair.New("OpenGL Version", Game.Renderer.GLVersion) },
+				{ "windowsize", Pair.New("Window Size", "{0}x{1}".F(Game.Renderer.Resolution.Width, Game.Renderer.Resolution.Height)) },
+				{ "windowscale", Pair.New("Window Scale", Game.Renderer.WindowScale.ToString("F2", CultureInfo.InvariantCulture)) },
 				{ "lang", Pair.New("System Language", lang) }
 			};
 		}
@@ -84,14 +89,14 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 				});
 			};
 
-			mainMenu.Get<ButtonWidget>("MODS_BUTTON").OnClick = () =>
+			mainMenu.Get<ButtonWidget>("CONTENT_BUTTON").OnClick = () =>
 			{
 				// Switching mods changes the world state (by disposing it),
 				// so we can't do this inside the input handler.
 				Game.RunAfterTick(() =>
 				{
-					Game.Settings.Game.PreviousMod = modData.Manifest.Id;
-					Game.InitializeMod("modchooser", null);
+					var content = modData.Manifest.Get<ModContent>();
+					Game.InitializeMod(content.ContentInstallerMod, new Arguments(new[] { "Content.Mod=" + modData.Manifest.Id }));
 				});
 			};
 
@@ -232,6 +237,8 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 
 			Game.OnRemoteDirectConnect += OnRemoteDirectConnect;
 
+			var newsURL = modData.Manifest.Get<WebServices>().GameNews;
+
 			// System information opt-out prompt
 			var sysInfoPrompt = widget.Get("SYSTEM_INFO_PROMPT");
 			sysInfoPrompt.IsVisible = () => menuType == MenuType.SystemInfoPrompt;
@@ -260,14 +267,14 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 					Game.Settings.Debug.SystemInformationVersionPrompt = SystemInformationVersion;
 					Game.Settings.Save();
 					SwitchMenu(MenuType.Main);
-					LoadAndDisplayNews(newsBG);
+					LoadAndDisplayNews(newsURL, newsBG);
 				};
 			}
 			else
-				LoadAndDisplayNews(newsBG);
+				LoadAndDisplayNews(newsURL, newsBG);
 		}
 
-		void LoadAndDisplayNews(Widget newsBG)
+		void LoadAndDisplayNews(string newsURL, Widget newsBG)
 		{
 			if (newsBG != null)
 			{
@@ -282,14 +289,15 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 					if (!fetchedNews)
 					{
 						// Send the mod and engine version to support version-filtered news (update prompts)
-						var newsURL = Game.Settings.Game.NewsUrl + "?version={0}&mod={1}&modversion={2}".F(
-							Uri.EscapeUriString(Game.Mods["modchooser"].Metadata.Version),
+						newsURL += "?version={0}&mod={1}&modversion={2}".F(
+							Uri.EscapeUriString(Game.EngineVersion),
 							Uri.EscapeUriString(Game.ModData.Manifest.Id),
 							Uri.EscapeUriString(Game.ModData.Manifest.Metadata.Version));
 
 						// Append system profile data if the player has opted in
 						if (Game.Settings.Debug.SendSystemInformation)
-							newsURL += "&" + GetSystemInformation()
+							newsURL += "&sysinfoversion={0}&".F(SystemInformationVersion)
+								+ GetSystemInformation()
 								.Select(kv => kv.Key + "=" + Uri.EscapeUriString(kv.Value.Second))
 								.JoinWith("&");
 

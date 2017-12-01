@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -13,7 +13,7 @@ using OpenRA.Traits;
 
 namespace OpenRA.Mods.Common.Traits
 {
-	public abstract class SupportPowerInfo : UpgradableTraitInfo
+	public abstract class SupportPowerInfo : PausableConditionalTraitInfo
 	{
 		[Desc("Measured in seconds.")]
 		public readonly int ChargeTime = 0;
@@ -59,10 +59,12 @@ namespace OpenRA.Mods.Common.Traits
 		public readonly string BeaconImage = "beacon";
 		[SequenceReference("BeaconImage")] public readonly string BeaconPoster = null;
 		[PaletteReference] public readonly string BeaconPosterPalette = "chrome";
-		[SequenceReference("BeaconImage")] public readonly string ClockSequence = "clock";
+		[SequenceReference("BeaconImage")] public readonly string ClockSequence = null;
+		[SequenceReference("BeaconImage")] public readonly string ArrowSequence = null;
+		[SequenceReference("BeaconImage")] public readonly string CircleSequence = null;
 
-		[SequenceReference("BeaconImage")] public readonly string ArrowSequence = "arrow";
-		[SequenceReference("BeaconImage")] public readonly string CircleSequence = "circles";
+		[Desc("Delay after launch, measured in ticks.")]
+		public readonly int BeaconDelay = 0;
 
 		public readonly bool DisplayRadarPing = false;
 
@@ -74,7 +76,7 @@ namespace OpenRA.Mods.Common.Traits
 		public SupportPowerInfo() { OrderName = GetType().Name + "Order"; }
 	}
 
-	public class SupportPower : UpgradableTrait<SupportPowerInfo>
+	public class SupportPower : PausableConditionalTrait<SupportPowerInfo>
 	{
 		public readonly Actor Self;
 		readonly SupportPowerInfo info;
@@ -89,21 +91,21 @@ namespace OpenRA.Mods.Common.Traits
 
 		public virtual void Charging(Actor self, string key)
 		{
-			Game.Sound.PlayToPlayer(self.Owner, Info.BeginChargeSound);
+			Game.Sound.PlayToPlayer(SoundType.UI, self.Owner, Info.BeginChargeSound);
 			Game.Sound.PlayNotification(self.World.Map.Rules, self.Owner, "Speech",
 				Info.BeginChargeSpeechNotification, self.Owner.Faction.InternalName);
 		}
 
 		public virtual void Charged(Actor self, string key)
 		{
-			Game.Sound.PlayToPlayer(self.Owner, Info.EndChargeSound);
+			Game.Sound.PlayToPlayer(SoundType.UI, self.Owner, Info.EndChargeSound);
 			Game.Sound.PlayNotification(self.World.Map.Rules, self.Owner, "Speech",
 				Info.EndChargeSpeechNotification, self.Owner.Faction.InternalName);
 		}
 
 		public virtual void SelectTarget(Actor self, string order, SupportPowerManager manager)
 		{
-			Game.Sound.PlayToPlayer(manager.Self.Owner, Info.SelectTargetSound);
+			Game.Sound.PlayToPlayer(SoundType.UI, manager.Self.Owner, Info.SelectTargetSound);
 			Game.Sound.PlayNotification(self.World.Map.Rules, self.Owner, "Speech",
 				Info.SelectTargetSpeechNotification, self.Owner.Faction.InternalName);
 			self.World.OrderGenerator = new SelectGenericPowerTarget(order, manager, info.Cursor, MouseButton.Left);
@@ -125,7 +127,11 @@ namespace OpenRA.Mods.Common.Traits
 		{
 			var renderPlayer = Self.World.RenderPlayer;
 			var isAllied = Self.Owner.IsAlliedWith(renderPlayer);
+<<<<<<< HEAD
 			Game.Sound.Play(isAllied ? Info.LaunchSound : Info.IncomingSound);
+=======
+			Game.Sound.Play(SoundType.UI, isAllied ? Info.LaunchSound : Info.IncomingSound);
+>>>>>>> upstream/master
 
 			// IsAlliedWith returns true if renderPlayer is null, so we are safe here.
 			var toPlayer = isAllied ? renderPlayer ?? Self.Owner : renderPlayer;

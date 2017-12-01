@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -16,23 +16,21 @@ using OpenRA.Traits;
 
 namespace OpenRA.Mods.Common.Activities
 {
-	public class ResupplyAircraft : Activity
+	public class ResupplyAircraft : CompositeActivity
 	{
-		readonly Aircraft aircraft;
-		Activity inner;
+		public ResupplyAircraft(Actor self) { }
 
-		public ResupplyAircraft(Actor self)
+		protected override void OnFirstRun(Actor self)
 		{
-			aircraft = self.Trait<Aircraft>();
-		}
+			var aircraft = self.Trait<Aircraft>();
+			var host = aircraft.GetActorBelow();
 
-		public override Activity Tick(Actor self)
-		{
-			if (IsCanceled)
-				return NextActivity;
+			if (host == null)
+				return;
 
-			if (inner == null)
+			if (aircraft.IsPlane)
 			{
+<<<<<<< HEAD
 				var host = aircraft.GetActorBelow();
 
 				if (host == null)
@@ -55,20 +53,28 @@ namespace OpenRA.Mods.Common.Activities
 						.Append(new AllowYieldingReservation(self))
 						.Append(new TakeOff(self)).Append(NextActivity).ToArray());
 				}
+=======
+				ChildActivity = ActivityUtils.SequenceActivities(
+					aircraft.GetResupplyActivities(host)
+					.Append(new AllowYieldingReservation(self))
+					.Append(new WaitFor(() => NextInQueue != null || aircraft.ReservedActor == null))
+					.ToArray());
+>>>>>>> upstream/master
 			}
 			else
-				inner = ActivityUtils.RunActivity(self, inner);
-
-			// The inner == NextActivity check is needed here because of the TakeOff issue mentioned in the comment above.
-			return inner == null || inner == NextActivity ? NextActivity : this;
+			{
+				// Helicopters should take off from their helipad immediately after resupplying.
+				// HACK: Append NextInQueue to TakeOff to avoid moving to the Rallypoint (if NextInQueue is non-null).
+				ChildActivity = ActivityUtils.SequenceActivities(
+					aircraft.GetResupplyActivities(host)
+					.Append(new AllowYieldingReservation(self))
+					.Append(new TakeOff(self)).Append(NextInQueue).ToArray());
+			}
 		}
 
-		public override void Cancel(Actor self)
+		public override Activity Tick(Actor self)
 		{
-			if (!IsCanceled && inner != null)
-				inner.Cancel(self);
-
-			base.Cancel(self);
+			return NextActivity;
 		}
 	}
 }

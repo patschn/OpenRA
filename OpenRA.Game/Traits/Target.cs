@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -145,12 +145,11 @@ namespace OpenRA.Traits
 						if (!actor.Targetables.Any(Exts.IsTraitEnabled))
 							return new[] { actor.CenterPosition };
 
-						var targetablePositions = actor.TraitOrDefault<ITargetablePositions>();
-						if (targetablePositions != null)
+						var targetablePositions = actor.TraitsImplementing<ITargetablePositions>().Where(Exts.IsTraitEnabled);
+						if (targetablePositions.Any())
 						{
-							var positions = targetablePositions.TargetablePositions(actor);
-							if (positions.Any())
-								return positions;
+							var target = this;
+							return targetablePositions.SelectMany(tp => tp.TargetablePositions(target.actor));
 						}
 
 						return new[] { actor.CenterPosition };

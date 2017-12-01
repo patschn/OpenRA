@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -9,12 +9,28 @@
  */
 #endregion
 
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using OpenRA.Traits;
 
 namespace OpenRA.Mods.Common.Warheads
 {
+	public enum ImpactType
+	{
+		None,
+		Ground,
+		Air,
+		TargetHit
+	}
+
+	public enum ImpactTargetType
+	{
+		NoActor,
+		ValidActor,
+		InvalidActor
+	}
+
 	[Desc("Base warhead class. This can be used to derive other warheads from.")]
 	public abstract class Warhead : IWarhead
 	{
@@ -32,6 +48,7 @@ namespace OpenRA.Mods.Common.Warheads
 
 		[Desc("Delay in ticks before applying the warhead effect.", "0 = instant (old model).")]
 		public readonly int Delay = 0;
+
 		int IWarhead.Delay { get { return Delay; } }
 
 		[Desc("The color used for this warhead's visualization in the world's `WarheadDebugOverlay` trait.")]

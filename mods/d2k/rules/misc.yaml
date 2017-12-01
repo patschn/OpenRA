@@ -4,7 +4,7 @@ crate:
 		Name: Crate
 	Crate:
 		Lifetime: 120
-		TerrainTypes: Sand, Dune, Rock, SpiceSand
+		TerrainTypes: Sand, Rock, Transition, Spice, SpiceSand, Dune, Concrete
 	GiveCashCrateAction@1:
 		Amount: 750
 		SelectionShares: 25
@@ -40,6 +40,20 @@ crate:
 		SelectionShares: 10
 		Units: engineer
 		Prerequisites: techlevel.low, barracks, upgrade.barracks
+	GiveUnitCrateAction@Thumper:
+		SelectionShares: 4
+		Units: thumper
+		Prerequisites: techlevel.high, barracks, upgrade.barracks
+	GiveUnitCrateAction@Grenadier:
+		SelectionShares: 8
+		Units: grenadier, grenadier
+		ValidFactions: atreides
+		Prerequisites: techlevel.medium, barracks, upgrade.barracks, high_tech_factory
+	GiveUnitCrateAction@Sardaukar:
+		SelectionShares: 8
+		Units: sardaukar, sardaukar
+		ValidFactions: harkonnen
+		Prerequisites: techlevel.medium, barracks, upgrade.barracks, high_tech_factory
 	GiveUnitCrateAction@Trike:
 		SelectionShares: 25
 		Units: trike
@@ -54,6 +68,15 @@ crate:
 		SelectionShares: 20
 		Units: quad
 		Prerequisites: techlevel.medium, light_factory, upgrade.light
+	GiveUnitCrateAction@StealthRaider:
+		SelectionShares: 8
+		Units: stealth_raider
+		ValidFactions: ordos
+		Prerequisites: techlevel.medium, light_factory, upgrade.light, high_tech_factory
+	GiveUnitCrateAction@Harvester:
+		SelectionShares: 10
+		Units: harvester
+		Prerequisites: techlevel.low, heavy_factory, refinery
 	GiveUnitCrateAction@CombatA:
 		SelectionShares: 15
 		Units: combat_tank_a
@@ -77,20 +100,10 @@ crate:
 		SelectionShares: 10
 		Units: missile_tank
 		Prerequisites: techlevel.high, heavy_factory, research_centre
-	GiveUnitCrateAction@StealthRaider:
-		SelectionShares: 8
-		Units: stealth_raider
-		ValidFactions: ordos
-		Prerequisites: techlevel.medium, light_factory, upgrade.light, high_tech_factory
 	GiveUnitCrateAction@Fremen:
 		SelectionShares: 5
 		Units: fremen, fremen
 		ValidFactions: atreides
-		Prerequisites: techlevel.high, palace
-	GiveUnitCrateAction@Sardaukar:
-		SelectionShares: 5
-		Units: sardaukar, sardaukar, sardaukar
-		ValidFactions: harkonnen
 		Prerequisites: techlevel.high, palace
 	GiveUnitCrateAction@Saboteur:
 		SelectionShares: 5
@@ -101,17 +114,17 @@ crate:
 		SelectionShares: 5
 		Units: sonic_tank
 		ValidFactions: atreides
-		Prerequisites: techlevel.high, research_centre
-	GiveUnitCrateAction@Devast:
+		Prerequisites: techlevel.high, heavy_factory, research_centre
+	GiveUnitCrateAction@Devastator:
 		SelectionShares: 5
 		Units: devastator
 		ValidFactions: harkonnen
-		Prerequisites: techlevel.high, research_centre
-	GiveUnitCrateAction@DeviatorTank:
+		Prerequisites: techlevel.high, heavy_factory, research_centre
+	GiveUnitCrateAction@Deviator:
 		SelectionShares: 5
 		Units: deviator
 		ValidFactions: ordos
-		Prerequisites: techlevel.high, research_centre
+		Prerequisites: techlevel.high, heavy_factory, research_centre
 	GiveMcvCrateAction:
 		SelectionShares: 0
 		NoBaseSelectionShares: 9001
@@ -123,6 +136,8 @@ crate:
 	Passenger:
 	CustomSelectionSize:
 		CustomBounds: 20,20
+	EditorTilesetFilter:
+		Categories: System
 
 mpspawn:
 	EditorOnlyTooltip:
@@ -134,6 +149,8 @@ mpspawn:
 	WithSpriteBody:
 	BodyOrientation:
 		QuantizedFacings: 1
+	EditorTilesetFilter:
+		Categories: System
 
 waypoint:
 	EditorOnlyTooltip:
@@ -145,9 +162,12 @@ waypoint:
 	WithSpriteBody:
 	BodyOrientation:
 		QuantizedFacings: 1
+	EditorTilesetFilter:
+		Categories: System
 
 ^carryall.colorpicker:
 	Inherits: carryall
+	-Health:
 	Aircraft:
 		InitialFacing: 104
 	RenderSprites:
@@ -167,6 +187,8 @@ camera:
 	RevealsShroud:
 		Range: 6c768
 		Type: CenterPosition
+	EditorTilesetFilter:
+		Categories: System
 
 wormspawner:
 	EditorOnlyTooltip:
@@ -179,12 +201,13 @@ wormspawner:
 	BodyOrientation:
 		QuantizedFacings: 1
 	WormSpawner:
+	EditorTilesetFilter:
+		Categories: System
 
 upgrade.conyard:
 	AlwaysVisible:
 	Tooltip:
 		Name: Construction Yard Upgrade
-		Description: Unlocks new construction options
 	Buildable:
 		BuildPaletteOrder: 50
 		Prerequisites: construction_yard
@@ -192,6 +215,7 @@ upgrade.conyard:
 		BuildLimit: 1
 		BuildDuration: 590
 		BuildDurationModifier: 40
+		Description: Unlocks additional construction options \n(Large Concrete Slab, Rocket Turret)
 	Valued:
 		Cost: 1000
 	RenderSprites:
@@ -206,7 +230,6 @@ upgrade.barracks:
 	AlwaysVisible:
 	Tooltip:
 		Name: Barracks Upgrade
-		Description: Unlocks additional infantry
 	Buildable:
 		BuildPaletteOrder: 50
 		Prerequisites: barracks
@@ -214,6 +237,7 @@ upgrade.barracks:
 		BuildLimit: 1
 		BuildDuration: 290
 		BuildDurationModifier: 40
+		Description: Unlocks additional infantry \n(Trooper, Engineer, Thumper Infantry)    \n\nRequired to unlock faction specific infantry \n(Atreides: Grenadier, Harkonnen: Sardaukar)
 	Valued:
 		Cost: 500
 	RenderSprites:
@@ -229,7 +253,6 @@ upgrade.light:
 	AlwaysVisible:
 	Tooltip:
 		Name: Light Factory Upgrade
-		Description: Unlocks additional light units
 	Buildable:
 		BuildPaletteOrder: 50
 		Prerequisites: light_factory
@@ -237,6 +260,7 @@ upgrade.light:
 		BuildLimit: 1
 		BuildDuration: 215
 		BuildDurationModifier: 40
+		Description: Unlocks additional light unit \n(Missile Quad) \n\nRequired to unlock faction specific light unit \n(Ordos: Stealth Raider Trike)
 	Valued:
 		Cost: 400
 	RenderSprites:
@@ -252,7 +276,6 @@ upgrade.heavy:
 	AlwaysVisible:
 	Tooltip:
 		Name: Heavy Factory Upgrade
-		Description: Unlocks advanced technology and heavy weapons
 	Buildable:
 		BuildPaletteOrder: 50
 		Prerequisites: heavy_factory
@@ -260,6 +283,7 @@ upgrade.heavy:
 		BuildLimit: 1
 		BuildDuration: 380
 		BuildDurationModifier: 40
+		Description: Unlocks additional construction options    \n(Repair Pad, IX Research Center) \n\nUnlocks additional heavy units \n(Siege Tank, Missile Tank, MCV)
 	Valued:
 		Cost: 800
 	RenderSprites:
@@ -275,7 +299,6 @@ upgrade.hightech:
 	AlwaysVisible:
 	Tooltip:
 		Name: High Tech Factory Upgrade
-		Description: Unlocks the Air Strike superweapon
 	Buildable:
 		BuildPaletteOrder: 50
 		Prerequisites: ~hightech.atreides, ~techlevel.superweapons
@@ -283,6 +306,7 @@ upgrade.hightech:
 		BuildLimit: 1
 		BuildDuration: 720
 		BuildDurationModifier: 40
+		Description: Unlocks the Atreides Air Strike superweapon
 	Valued:
 		Cost: 1500
 	RenderSprites:

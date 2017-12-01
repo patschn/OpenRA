@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -15,7 +15,7 @@ using OpenRA.Traits;
 
 namespace OpenRA.Mods.Common.Traits
 {
-	public class PowerInfo : UpgradableTraitInfo
+	public class PowerInfo : ConditionalTraitInfo
 	{
 		[Desc("If negative, it will drain power. If positive, it will provide power.")]
 		public readonly int Amount = 0;
@@ -23,7 +23,7 @@ namespace OpenRA.Mods.Common.Traits
 		public override object Create(ActorInitializer init) { return new Power(init.Self, this); }
 	}
 
-	public class Power : UpgradableTrait<PowerInfo>, INotifyAddedToWorld, INotifyRemovedFromWorld, INotifyOwnerChanged
+	public class Power : ConditionalTrait<PowerInfo>, INotifyAddedToWorld, INotifyRemovedFromWorld, INotifyOwnerChanged
 	{
 		readonly Lazy<IPowerModifier[]> powerModifiers;
 
@@ -41,8 +41,8 @@ namespace OpenRA.Mods.Common.Traits
 			powerModifiers = Exts.Lazy(() => self.TraitsImplementing<IPowerModifier>().ToArray());
 		}
 
-		protected override void UpgradeEnabled(Actor self) { PlayerPower.UpdateActor(self); }
-		protected override void UpgradeDisabled(Actor self) { PlayerPower.UpdateActor(self); }
+		protected override void TraitEnabled(Actor self) { PlayerPower.UpdateActor(self); }
+		protected override void TraitDisabled(Actor self) { PlayerPower.UpdateActor(self); }
 		public void AddedToWorld(Actor self) { PlayerPower.UpdateActor(self); }
 		public void RemovedFromWorld(Actor self) { PlayerPower.RemoveActor(self); }
 		public void OnOwnerChanged(Actor self, Player oldOwner, Player newOwner)

@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -28,7 +28,7 @@ namespace OpenRA.Mods.Common.Activities
 		readonly Mobile mobile;
 		readonly WDist nearEnough;
 		readonly Func<List<CPos>> getPath;
-		readonly Actor ignoredActor;
+		readonly Actor ignoreActor;
 
 		List<CPos> path;
 		CPos? destination;
@@ -37,6 +37,9 @@ namespace OpenRA.Mods.Common.Activities
 		bool hasWaited;
 		bool hasNotifiedBlocker;
 		int waitTicksRemaining;
+
+		// To work around queued activity issues while minimizing changes to legacy behaviour
+		bool evaluateNearestMovableCell;
 
 		// Scriptable move order
 		// Ignores lane bias and nearby units
@@ -57,14 +60,25 @@ namespace OpenRA.Mods.Common.Activities
 			nearEnough = WDist.Zero;
 		}
 
-		public Move(Actor self, CPos destination, WDist nearEnough)
+		public Move(Actor self, CPos destination, WDist nearEnough, Actor ignoreActor = null, bool evaluateNearestMovableCell = false)
 		{
 			mobile = self.Trait<Mobile>();
 
-			getPath = () => self.World.WorldActor.Trait<IPathFinder>()
-				.FindUnitPath(mobile.ToCell, destination, self);
+			getPath = () =>
+			{
+				if (!this.destination.HasValue)
+					return NoPath;
+
+				return self.World.WorldActor.Trait<IPathFinder>()
+					.FindUnitPath(mobile.ToCell, this.destination.Value, self, ignoreActor);
+			};
+
+			// Note: Will be recalculated from OnFirstRun if evaluateNearestMovableCell is true
 			this.destination = destination;
+
 			this.nearEnough = nearEnough;
+			this.ignoreActor = ignoreActor;
+			this.evaluateNearestMovableCell = evaluateNearestMovableCell;
 		}
 
 		public Move(Actor self, CPos destination, SubCell subCell, WDist nearEnough)
@@ -75,25 +89,6 @@ namespace OpenRA.Mods.Common.Activities
 				.FindUnitPathToRange(mobile.FromCell, subCell, self.World.Map.CenterOfSubCell(destination, subCell), nearEnough, self);
 			this.destination = destination;
 			this.nearEnough = nearEnough;
-		}
-
-		public Move(Actor self, CPos destination, Actor ignoredActor)
-		{
-			mobile = self.Trait<Mobile>();
-
-			getPath = () =>
-			{
-				List<CPos> path;
-				using (var search =
-					PathSearch.FromPoint(self.World, mobile.Info, self, mobile.ToCell, destination, false)
-					.WithIgnoredActor(ignoredActor))
-					path = self.World.WorldActor.Trait<IPathFinder>().FindPath(search);
-				return path;
-			};
-
-			this.destination = destination;
-			nearEnough = WDist.Zero;
-			this.ignoredActor = ignoredActor;
 		}
 
 		public Move(Actor self, Target target, WDist range)
@@ -140,9 +135,20 @@ namespace OpenRA.Mods.Common.Activities
 			return path;
 		}
 
+		protected override void OnFirstRun(Actor self)
+		{
+			if (evaluateNearestMovableCell && destination.HasValue)
+			{
+				var movableDestination = mobile.NearestMoveableCell(destination.Value);
+				destination = mobile.CanEnterCell(movableDestination) ? movableDestination : (CPos?)null;
+			}
+		}
+
 		public override Activity Tick(Actor self)
 		{
-			if (IsCanceled)
+			// If the actor is inside a tunnel then we must let them move
+			// all the way through before moving to the next activity
+			if (IsCanceled && self.Location.Layer != CustomMovementLayerType.Tunnel)
 				return NextActivity;
 
 			if (mobile.IsTraitDisabled)
@@ -184,10 +190,15 @@ namespace OpenRA.Mods.Common.Activities
 			else
 			{
 				mobile.SetLocation(mobile.FromCell, mobile.FromSubCell, nextCell.Value.First, nextCell.Value.Second);
-				var from = self.World.Map.CenterOfSubCell(mobile.FromCell, mobile.FromSubCell);
+
+				var map = self.World.Map;
+				var from = (mobile.FromCell.Layer == 0 ? map.CenterOfCell(mobile.FromCell) :
+					self.World.GetCustomMovementLayers()[mobile.FromCell.Layer].CenterOfCell(mobile.FromCell)) +
+					map.Grid.OffsetOfSubCell(mobile.FromSubCell);
+
 				var to = Util.BetweenCells(self.World, mobile.FromCell, mobile.ToCell) +
-					(self.World.Map.Grid.OffsetOfSubCell(mobile.FromSubCell) +
-					self.World.Map.Grid.OffsetOfSubCell(mobile.ToSubCell)) / 2;
+					(map.Grid.OffsetOfSubCell(mobile.FromSubCell) + map.Grid.OffsetOfSubCell(mobile.ToSubCell)) / 2;
+
 				var move = new MoveFirstHalf(
 					this,
 					from,
@@ -220,7 +231,7 @@ namespace OpenRA.Mods.Common.Activities
 			var containsTemporaryBlocker = WorldUtils.ContainsTemporaryBlocker(self.World, nextCell, self);
 
 			// Next cell in the move is blocked by another actor
-			if (containsTemporaryBlocker || !mobile.CanEnterCell(nextCell, ignoredActor, true))
+			if (containsTemporaryBlocker || !mobile.CanEnterCell(nextCell, ignoreActor, true))
 			{
 				// Are we close enough?
 				var cellRange = nearEnough.Length / 1024;
@@ -268,14 +279,8 @@ namespace OpenRA.Mods.Common.Activities
 			hasWaited = false;
 			path.RemoveAt(path.Count - 1);
 
-			var subCell = mobile.GetAvailableSubCell(nextCell, SubCell.Any, ignoredActor);
+			var subCell = mobile.GetAvailableSubCell(nextCell, SubCell.Any, ignoreActor);
 			return Pair.New(nextCell, subCell);
-		}
-
-		public override void Cancel(Actor self)
-		{
-			path = NoPath;
-			base.Cancel(self);
 		}
 
 		public override IEnumerable<Target> GetTargets(Actor self)
@@ -292,6 +297,7 @@ namespace OpenRA.Mods.Common.Activities
 			protected readonly Move Move;
 			protected readonly WPos From, To;
 			protected readonly int FromFacing, ToFacing;
+			protected readonly bool EnableArc;
 			protected readonly WPos ArcCenter;
 			protected readonly int ArcFromLength;
 			protected readonly WAngle ArcFromAngle;
@@ -328,13 +334,14 @@ namespace OpenRA.Mods.Common.Activities
 					ArcFromAngle = (ArcCenter - from).Yaw;
 					ArcToLength = (ArcCenter - to).HorizontalLength;
 					ArcToAngle = (ArcCenter - to).Yaw;
+					EnableArc = true;
 				}
 			}
 
-			public override void Cancel(Actor self)
+			public override bool Cancel(Actor self, bool keepQueue = false)
 			{
-				Move.Cancel(self);
-				base.Cancel(self);
+				Move.Cancel(self, keepQueue);
+				return base.Cancel(self);
 			}
 
 			public override void Queue(Activity activity)
@@ -373,7 +380,7 @@ namespace OpenRA.Mods.Common.Activities
 				if (MoveFractionTotal != 0)
 				{
 					WPos pos;
-					if (FromFacing != ToFacing)
+					if (EnableArc)
 					{
 						var angle = WAngle.Lerp(ArcFromAngle, ArcToAngle, moveFraction, MoveFractionTotal);
 						var length = int2.Lerp(ArcFromLength, ArcToLength, moveFraction, MoveFractionTotal);
@@ -415,35 +422,42 @@ namespace OpenRA.Mods.Common.Activities
 
 			protected override MovePart OnComplete(Actor self, Mobile mobile, Move parent)
 			{
-				var fromSubcellOffset = self.World.Map.Grid.OffsetOfSubCell(mobile.FromSubCell);
-				var toSubcellOffset = self.World.Map.Grid.OffsetOfSubCell(mobile.ToSubCell);
+				var map = self.World.Map;
+				var fromSubcellOffset = map.Grid.OffsetOfSubCell(mobile.FromSubCell);
+				var toSubcellOffset = map.Grid.OffsetOfSubCell(mobile.ToSubCell);
 
-				var nextCell = parent.PopPath(self);
-				if (nextCell != null)
+				if (!IsCanceled || self.Location.Layer == CustomMovementLayerType.Tunnel)
 				{
-					if (IsTurn(mobile, nextCell.Value.First))
+					var nextCell = parent.PopPath(self);
+					if (nextCell != null)
 					{
-						var nextSubcellOffset = self.World.Map.Grid.OffsetOfSubCell(nextCell.Value.Second);
-						var ret = new MoveFirstHalf(
-							Move,
-							Util.BetweenCells(self.World, mobile.FromCell, mobile.ToCell) + (fromSubcellOffset + toSubcellOffset) / 2,
-							Util.BetweenCells(self.World, mobile.ToCell, nextCell.Value.First) + (toSubcellOffset + nextSubcellOffset) / 2,
-							mobile.Facing,
-							Util.GetNearestFacing(mobile.Facing, self.World.Map.FacingBetween(mobile.ToCell, nextCell.Value.First, mobile.Facing)),
-							moveFraction - MoveFractionTotal);
+						if (IsTurn(mobile, nextCell.Value.First))
+						{
+							var nextSubcellOffset = map.Grid.OffsetOfSubCell(nextCell.Value.Second);
+							var ret = new MoveFirstHalf(
+								Move,
+								Util.BetweenCells(self.World, mobile.FromCell, mobile.ToCell) + (fromSubcellOffset + toSubcellOffset) / 2,
+								Util.BetweenCells(self.World, mobile.ToCell, nextCell.Value.First) + (toSubcellOffset + nextSubcellOffset) / 2,
+								mobile.Facing,
+								Util.GetNearestFacing(mobile.Facing, map.FacingBetween(mobile.ToCell, nextCell.Value.First, mobile.Facing)),
+								moveFraction - MoveFractionTotal);
 
-						mobile.FinishedMoving(self);
-						mobile.SetLocation(mobile.ToCell, mobile.ToSubCell, nextCell.Value.First, nextCell.Value.Second);
-						return ret;
+							mobile.FinishedMoving(self);
+							mobile.SetLocation(mobile.ToCell, mobile.ToSubCell, nextCell.Value.First, nextCell.Value.Second);
+							return ret;
+						}
+
+						parent.path.Add(nextCell.Value.First);
 					}
-
-					parent.path.Add(nextCell.Value.First);
 				}
+
+				var toPos = mobile.ToCell.Layer == 0 ? map.CenterOfCell(mobile.ToCell) :
+					self.World.GetCustomMovementLayers()[mobile.ToCell.Layer].CenterOfCell(mobile.ToCell);
 
 				var ret2 = new MoveSecondHalf(
 					Move,
 					Util.BetweenCells(self.World, mobile.FromCell, mobile.ToCell) + (fromSubcellOffset + toSubcellOffset) / 2,
-					self.World.Map.CenterOfCell(mobile.ToCell) + toSubcellOffset,
+					toPos + toSubcellOffset,
 					mobile.Facing,
 					mobile.Facing,
 					moveFraction - MoveFractionTotal);

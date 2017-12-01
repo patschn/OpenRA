@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -22,6 +22,9 @@ namespace OpenRA.Mods.Common.Traits
 		[Desc("Palette to use for rendering the placement sprite.")]
 		[PaletteReference] public readonly string Palette = TileSet.TerrainPaletteInternalName;
 
+		[Desc("Palette to use for rendering the placement sprite for line build segments.")]
+		[PaletteReference] public readonly string LineBuildSegmentPalette = TileSet.TerrainPaletteInternalName;
+
 		[Desc("Play NewOptionsNotification this many ticks after building placement.")]
 		public readonly int NewOptionsNotificationDelay = 10;
 
@@ -31,16 +34,18 @@ namespace OpenRA.Mods.Common.Traits
 		public object Create(ActorInitializer init) { return new PlaceBuilding(this); }
 	}
 
-	public class PlaceBuilding : IResolveOrder
+	public class PlaceBuilding : IResolveOrder, ITick
 	{
 		readonly PlaceBuildingInfo info;
+		bool triggerNotification;
+		int tick;
 
 		public PlaceBuilding(PlaceBuildingInfo info)
 		{
 			this.info = info;
 		}
 
-		public void ResolveOrder(Actor self, Order order)
+		void IResolveOrder.ResolveOrder(Actor self, Order order)
 		{
 			var os = order.OrderString;
 			if (os != "PlaceBuilding" &&
@@ -72,21 +77,35 @@ namespace OpenRA.Mods.Common.Traits
 
 				if (os == "LineBuild")
 				{
-					var playSounds = true;
+					// Build the parent actor first
+					var placed = w.CreateActor(order.TargetString, new TypeDictionary
+					{
+						new LocationInit(order.TargetLocation),
+						new OwnerInit(order.Player),
+						new FactionInit(faction),
+					});
+
+					foreach (var s in buildingInfo.BuildSounds)
+						Game.Sound.PlayToPlayer(SoundType.World, order.Player, s, placed.CenterPosition);
+
+					// Build the connection segments
+					var segmentType = unit.TraitInfo<LineBuildInfo>().SegmentType;
+					if (string.IsNullOrEmpty(segmentType))
+						segmentType = order.TargetString;
+
 					foreach (var t in BuildingUtils.GetLineBuildCells(w, order.TargetLocation, order.TargetString, buildingInfo))
 					{
-						var building = w.CreateActor(order.TargetString, new TypeDictionary
+						if (t.First == order.TargetLocation)
+							continue;
+
+						w.CreateActor(t.First == order.TargetLocation ? order.TargetString : segmentType, new TypeDictionary
 						{
-							new LocationInit(t),
+							new LocationInit(t.First),
 							new OwnerInit(order.Player),
-							new FactionInit(faction)
+							new FactionInit(faction),
+							new LineBuildDirectionInit(t.First.X == order.TargetLocation.X ? LineBuildDirection.Y : LineBuildDirection.X),
+							new LineBuildParentInit(new[] { t.Second, placed })
 						});
-
-						if (playSounds)
-							foreach (var s in buildingInfo.BuildSounds)
-								Game.Sound.PlayToPlayer(order.Player, s, building.CenterPosition);
-
-						playSounds = false;
 					}
 				}
 				else if (os == "PlacePlug")
@@ -108,7 +127,7 @@ namespace OpenRA.Mods.Common.Traits
 
 					pluggable.EnablePlug(host, plugInfo.Type);
 					foreach (var s in buildingInfo.BuildSounds)
-						Game.Sound.PlayToPlayer(order.Player, s, host.CenterPosition);
+						Game.Sound.PlayToPlayer(SoundType.World, order.Player, s, host.CenterPosition);
 				}
 				else
 				{
@@ -124,7 +143,7 @@ namespace OpenRA.Mods.Common.Traits
 					});
 
 					foreach (var s in buildingInfo.BuildSounds)
-						Game.Sound.PlayToPlayer(order.Player, s, building.CenterPosition);
+						Game.Sound.PlayToPlayer(SoundType.World, order.Player, s, building.CenterPosition);
 				}
 
 				if (producer.Actor != null)
@@ -143,9 +162,24 @@ namespace OpenRA.Mods.Common.Traits
 				}
 
 				if (GetNumBuildables(self.Owner) > prevItems)
-					w.Add(new DelayedAction(info.NewOptionsNotificationDelay,
-							() => Game.Sound.PlayNotification(self.World.Map.Rules, order.Player, "Speech", info.NewOptionsNotification, order.Player.Faction.InternalName)));
+					triggerNotification = true;
 			});
+		}
+
+		void ITick.Tick(Actor self)
+		{
+			if (!triggerNotification)
+				return;
+
+			if (tick++ >= info.NewOptionsNotificationDelay)
+				PlayNotification(self);
+		}
+
+		void PlayNotification(Actor self)
+		{
+			Game.Sound.PlayNotification(self.World.Map.Rules, self.Owner, "Speech", info.NewOptionsNotification, self.Owner.Faction.InternalName);
+			triggerNotification = false;
+			tick = 0;
 		}
 
 		static int GetNumBuildables(Player p)

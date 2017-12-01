@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -12,7 +12,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using OpenRA.FileSystem;
 using OpenRA.Widgets;
+using FS = OpenRA.FileSystem.FileSystem;
 
 namespace OpenRA.Mods.Common.Widgets.Logic
 {
@@ -28,13 +30,15 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 		bool discAvailable;
 
 		[ObjectCreator.UseCtor]
-		public ModContentLogic(Widget widget, Manifest mod, ModContent content, Action onCancel)
+		public ModContentLogic(Widget widget, ModData modData, Manifest mod, ModContent content, Action onCancel)
 		{
 			this.content = content;
 
 			var panel = widget.Get("CONTENT_PANEL");
 
-			var modFileSystem = new FileSystem.FileSystem(Game.Mods);
+			var modObjectCreator = new ObjectCreator(mod, Game.Mods);
+			var modPackageLoaders = modObjectCreator.GetLoaders<IPackageLoader>(mod.PackageFormats, "package");
+			var modFileSystem = new FS(Game.Mods, modPackageLoaders);
 			modFileSystem.LoadFromManifest(mod);
 
 			var sourceYaml = MiniYaml.Load(modFileSystem, content.Sources, null);

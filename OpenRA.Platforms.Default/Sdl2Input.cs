@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -40,7 +40,17 @@ namespace OpenRA.Platforms.Default
 				 | ((raw & (int)SDL.SDL_Keymod.KMOD_SHIFT) != 0 ? Modifiers.Shift : 0);
 		}
 
-		public void PumpInput(IInputHandler inputHandler)
+		int2 EventPosition(Sdl2GraphicsDevice device, int x, int y)
+		{
+			// On Windows and Linux (X11) events are given in surface coordinates
+			// These must be scaled to our effective window coordinates
+			if (Platform.CurrentPlatform != PlatformType.OSX && device.WindowSize != device.SurfaceSize)
+				return new int2((int)(x / device.WindowScale), (int)(y / device.WindowScale));
+
+			return new int2(x, y);
+		}
+
+		public void PumpInput(Sdl2GraphicsDevice device, IInputHandler inputHandler)
 		{
 			var mods = MakeModifiers((int)SDL.SDL_GetModState());
 			var scrollDelta = 0;
@@ -67,6 +77,11 @@ namespace OpenRA.Platforms.Default
 								case SDL.SDL_WindowEventID.SDL_WINDOWEVENT_FOCUS_GAINED:
 									Game.HasInputFocus = true;
 									break;
+
+								// Triggered when moving between displays with different DPI settings
+								case SDL.SDL_WindowEventID.SDL_WINDOWEVENT_SIZE_CHANGED:
+									device.WindowSizeChanged();
+									break;
 							}
 
 							break;
@@ -83,8 +98,7 @@ namespace OpenRA.Platforms.Default
 							var button = MakeButton(e.button.button);
 							lastButtonBits |= button;
 
-							var pos = new int2(e.button.x, e.button.y);
-
+							var pos = EventPosition(device, e.button.x, e.button.y);
 							inputHandler.OnMouseInput(new MouseInput(
 								MouseInputEvent.Down, button, scrollDelta, pos, mods,
 								MultiTapDetection.DetectFromMouse(e.button.button, pos)));
@@ -103,7 +117,7 @@ namespace OpenRA.Platforms.Default
 							var button = MakeButton(e.button.button);
 							lastButtonBits &= ~button;
 
-							var pos = new int2(e.button.x, e.button.y);
+							var pos = EventPosition(device, e.button.x, e.button.y);
 							inputHandler.OnMouseInput(new MouseInput(
 								MouseInputEvent.Up, button, scrollDelta, pos, mods,
 								MultiTapDetection.InfoFromMouse(e.button.button)));
@@ -113,9 +127,10 @@ namespace OpenRA.Platforms.Default
 
 					case SDL.SDL_EventType.SDL_MOUSEMOTION:
 						{
+							var pos = EventPosition(device, e.motion.x, e.motion.y);
 							pendingMotion = new MouseInput(
 								MouseInputEvent.Move, lastButtonBits, scrollDelta,
-								new int2(e.motion.x, e.motion.y), mods, 0);
+								pos, mods, 0);
 
 							break;
 						}
@@ -155,7 +170,8 @@ namespace OpenRA.Platforms.Default
 								Key = keyCode,
 								Modifiers = mods,
 								UnicodeChar = (char)e.key.keysym.sym,
-								MultiTapCount = tapCount
+								MultiTapCount = tapCount,
+								IsRepeat = e.key.repeat != 0
 							};
 
 							// Special case workaround for windows users

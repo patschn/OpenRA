@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -65,6 +65,8 @@ namespace OpenRA.Network
 			report.SyncedRandom = orderManager.World.SharedRandom.Last;
 			report.TotalCount = orderManager.World.SharedRandom.TotalCount;
 			report.Traits.Clear();
+			report.Effects.Clear();
+
 			foreach (var actor in orderManager.World.ActorsHavingTrait<ISync>())
 				foreach (var syncHash in actor.SyncHashes)
 					if (syncHash.Hash != 0)
@@ -167,8 +169,10 @@ namespace OpenRA.Network
 
 		struct TypeInfo
 		{
-			static ParameterExpression syncParam = Expression.Parameter(typeof(ISync), "sync");
-			static ConstantExpression nullString = Expression.Constant(null, typeof(string));
+			static readonly ParameterExpression SyncParam = Expression.Parameter(typeof(ISync), "sync");
+			static readonly ConstantExpression NullString = Expression.Constant(null, typeof(string));
+			static readonly ConstantExpression TrueString = Expression.Constant(bool.TrueString, typeof(string));
+			static readonly ConstantExpression FalseString = Expression.Constant(bool.FalseString, typeof(string));
 
 			public readonly Func<ISync, object>[] SerializableCopyOfMemberFunctions;
 			public readonly string[] Names;
@@ -185,7 +189,7 @@ namespace OpenRA.Network
 							"Properties using the Sync attribute must be readable and must not use index parameters.\n" +
 							"Invalid Property: " + prop.DeclaringType.FullName + "." + prop.Name);
 
-				var sync = Expression.Convert(syncParam, type);
+				var sync = Expression.Convert(SyncParam, type);
 				SerializableCopyOfMemberFunctions = fields
 					.Select(fi => SerializableCopyOfMember(Expression.Field(sync, fi), fi.FieldType, fi.Name))
 					.Concat(properties.Select(pi => SerializableCopyOfMember(Expression.Property(sync, pi), pi.PropertyType, pi.Name)))
@@ -204,8 +208,16 @@ namespace OpenRA.Network
 					// just box a copy of the current value into an object. This is faster than calling ToString. We
 					// can call ToString later when we generate the report. Most of the time, the sync report is never
 					// generated so we successfully avoid the overhead to calling ToString.
+					if (memberType == typeof(bool))
+					{
+						// PERF: If the member is a Boolean, we can also avoid the allocation caused by boxing it.
+						// Instead, we can just return the resulting strings directly.
+						var getBoolString = Expression.Condition(getMember, TrueString, FalseString);
+						return Expression.Lambda<Func<ISync, string>>(getBoolString, name, new[] { SyncParam }).Compile();
+					}
+
 					var boxedCopy = Expression.Convert(getMember, typeof(object));
-					return Expression.Lambda<Func<ISync, object>>(boxedCopy, name, new[] { syncParam }).Compile();
+					return Expression.Lambda<Func<ISync, object>>(boxedCopy, name, new[] { SyncParam }).Compile();
 				}
 
 				// For reference types, we have to call ToString right away to get a snapshot of the value. We cannot
@@ -232,10 +244,10 @@ namespace OpenRA.Network
 					var member = Expression.Block(new[] { memberVariable }, assignMemberVariable);
 					getString = Expression.Call(member, toString);
 					var nullMember = Expression.Constant(null, memberType);
-					getString = Expression.Condition(Expression.Equal(member, nullMember), nullString, getString);
+					getString = Expression.Condition(Expression.Equal(member, nullMember), NullString, getString);
 				}
 
-				return Expression.Lambda<Func<ISync, string>>(getString, name, new[] { syncParam }).Compile();
+				return Expression.Lambda<Func<ISync, string>>(getString, name, new[] { SyncParam }).Compile();
 			}
 		}
 	}

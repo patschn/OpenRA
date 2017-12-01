@@ -1,31 +1,30 @@
 E1:
 	Inherits: ^Soldier
+	Inherits@EXPERIENCE: ^GainsExperience
+	Inherits@AUTOTARGET: ^AutoTargetGround
 	Buildable:
 		Queue: Infantry
 		BuildPaletteOrder: 10
-		Prerequisites: ~barracks
+		Prerequisites: ~barracks, ~techlevel.low
+		Description: General-purpose infantry.\n  Strong vs Infantry\n  Weak vs Vehicles, Aircraft
 	Valued:
 		Cost: 120
 	Tooltip:
 		Name: Light Infantry
-		Description: General-purpose infantry.\n  Strong vs Infantry\n  Weak vs Vehicles, Aircraft
 	Health:
 		HP: 125
 	Mobile:
 		Speed: 71
 	Armament@PRIMARY:
 		Weapon: Minigun
-		UpgradeTypes: eliteweapon
-		UpgradeMaxEnabledLevel: 0
-		UpgradeMaxAcceptedLevel: 1
+		RequiresCondition: !rank-elite
 	Armament@ELITE:
 		Weapon: M1Carbine
-		UpgradeTypes: eliteweapon
-		UpgradeMinEnabledLevel: 1
+		RequiresCondition: rank-elite
 	AttackFrontal:
 		Voice: Attack
 	WithInfantryBody:
-		AttackSequence: attack
+		DefaultAttackSequence: attack
 	ProducibleWithLevel:
 		Prerequisites: barracks.upgraded
 	RenderSprites:
@@ -33,6 +32,8 @@ E1:
 		FactionImages:
 			gdi: e1.gdi
 			nod: e1.nod
+	RevealsShroud:
+		Range: 5c0
 
 ENGINEER:
 	Inherits: ^Soldier
@@ -40,17 +41,17 @@ ENGINEER:
 		Cost: 500
 	Tooltip:
 		Name: Engineer
-		Description: Infiltrates and captures enemy structures.\n  Unarmed
 	Buildable:
 		Queue: Infantry
-		BuildPaletteOrder: 30
-		Prerequisites: ~barracks
+		BuildPaletteOrder: 40
+		Prerequisites: ~barracks, ~techlevel.low
+		Description: Infiltrates and captures enemy structures.\n  Unarmed
 	Voiced:
 		VoiceSet: Engineer
 	Mobile:
 		Speed: 56
 	Health:
-		HP: 500
+		HP: 100
 	Passenger:
 		PipType: Yellow
 	EngineerRepair:
@@ -59,8 +60,6 @@ ENGINEER:
 	Captures:
 		CaptureTypes: building
 		PlayerExperience: 50
-	-AutoTarget:
-	-GainsExperience:
 	RenderSprites:
 		Image: engineer.gdi
 		FactionImages:
@@ -78,6 +77,7 @@ FLAMEGUY:
 		TerrainSpeeds:
 			Clear: 45
 			Road: 50
+			Bridge: 50
 			Rail: 45
 			DirtRoad: 50
 			Rough: 40
@@ -93,6 +93,10 @@ FLAMEGUY:
 		Step: -10
 		HealIfBelow: 101
 	ScaredyCat:
+		PanicSequencePrefix:
 	WithDeathAnimation:
 		FallbackSequence: die
 		UseDeathTypeSuffix: false
+	HitShape:
+	EditorTilesetFilter:
+		Categories: System

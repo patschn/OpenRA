@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -37,9 +37,6 @@ namespace OpenRA.Mods.Common.Traits
 
 		[Desc("Range from self for looking for an alternate transport (default: 5.5 cells).")]
 		public readonly WDist AlternateTransportScanRange = WDist.FromCells(11) / 2;
-
-		[Desc("Upgrade types to grant to transport.")]
-		[UpgradeGrantedReference] public readonly string[] GrantUpgrades = { };
 
 		[VoiceReference] public readonly string Voice = "Action";
 
@@ -110,7 +107,7 @@ namespace OpenRA.Mods.Common.Traits
 
 				self.CancelActivity();
 				var transports = order.OrderString == "EnterTransports";
-				self.QueueActivity(new EnterTransport(self, order.TargetActor, transports ? Info.MaxAlternateTransportAttempts : 0, transports));
+				self.QueueActivity(new EnterTransport(self, order.TargetActor, transports ? Info.MaxAlternateTransportAttempts : 0, !transports));
 			}
 		}
 

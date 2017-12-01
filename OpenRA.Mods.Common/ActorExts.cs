@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -21,9 +21,6 @@ namespace OpenRA.Mods.Common
 	{
 		public static bool IsAtGroundLevel(this Actor self)
 		{
-			if (self.IsDead)
-				return false;
-
 			if (self.OccupiesSpace == null)
 				return false;
 
@@ -47,7 +44,7 @@ namespace OpenRA.Mods.Common
 			if (self.EffectiveOwner != null && self.EffectiveOwner.Disguised && !toActor.Info.HasTraitInfo<IgnoresDisguiseInfo>())
 				return toActor.Owner.Stances[self.EffectiveOwner.Owner] == Stance.Ally;
 
-			return stance == Stance.Ally;
+			return false;
 		}
 
 		public static bool AppearsHostileTo(this Actor self, Actor toActor)
@@ -91,8 +88,11 @@ namespace OpenRA.Mods.Common
 			if (move != null)
 			{
 				// Move within sight range of the frozen actor
-				var sight = self.TraitOrDefault<RevealsShroud>();
-				var range = sight != null ? sight.Range : WDist.FromCells(2);
+				var range = self.TraitsImplementing<RevealsShroud>()
+					.Where(s => !s.IsTraitDisabled)
+					.Select(s => s.Range)
+					.Append(WDist.FromCells(2))
+					.Max();
 
 				self.QueueActivity(move.MoveWithinRange(Target.FromPos(frozen.CenterPosition), range));
 			}
@@ -117,28 +117,6 @@ namespace OpenRA.Mods.Common
 		public static void NotifyBlocker(this Actor self, IEnumerable<CPos> positions)
 		{
 			NotifyBlocker(self, positions.SelectMany(p => self.World.ActorMap.GetActorsAt(p)));
-		}
-
-		public static bool CanHarvestAt(this Actor self, CPos pos, ResourceLayer resLayer, HarvesterInfo harvInfo,
-			ResourceClaimLayer territory)
-		{
-			var resType = resLayer.GetResource(pos);
-			if (resType == null)
-				return false;
-
-			// Can the harvester collect this kind of resource?
-			if (!harvInfo.Resources.Contains(resType.Info.Name))
-				return false;
-
-			if (territory != null)
-			{
-				// Another harvester has claimed this resource:
-				ResourceClaim claim;
-				if (territory.IsClaimedByAnyoneElse(self as Actor, pos, out claim))
-					return false;
-			}
-
-			return true;
 		}
 
 		public static CPos ClosestCell(this Actor self, IEnumerable<CPos> cells)

@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -22,7 +22,7 @@ using OpenRA.Traits;
 
 namespace OpenRA.Mods.Common.Projectiles
 {
-	public class AreaBeamInfo : IProjectileInfo
+	public class AreaBeamInfo : IProjectileInfo, IRulesetLoaded<WeaponInfo>
 	{
 		[Desc("Projectile speed in WDist / tick, two values indicate a randomly picked velocity per beam.")]
 		public readonly WDist[] Speed = { new WDist(128) };
@@ -54,10 +54,10 @@ namespace OpenRA.Mods.Common.Projectiles
 		[Desc("Can this projectile be blocked when hitting actors with an IBlocksProjectiles trait.")]
 		public readonly bool Blockable = false;
 
-		[Desc("Extra search radius beyond beam width. Required to ensure affecting actors with large health radius.")]
-		public readonly WDist TargetExtraSearchRadius = new WDist(1536);
+		[Desc("Does the beam follow the target.")]
+		public readonly bool TrackTarget = false;
 
-		[Desc("Should the beam be visuall rendered? False = Beam is invisible.")]
+		[Desc("Should the beam be visually rendered? False = Beam is invisible.")]
 		public readonly bool RenderBeam = true;
 
 		[Desc("Equivalent to sequence ZOffset. Controls Z sorting.")]
@@ -69,10 +69,27 @@ namespace OpenRA.Mods.Common.Projectiles
 		[Desc("Beam color is the player's color.")]
 		public readonly bool UsePlayerColor = false;
 
+		[Desc("Scan radius for actors with projectile-blocking trait. If set to a negative value (default), it will automatically scale",
+			"to the blocker with the largest health shape. Only set custom values if you know what you're doing.")]
+		public WDist BlockerScanRadius = new WDist(-1);
+
+		[Desc("Scan radius for actors damaged by beam. If set to a negative value (default), it will automatically scale to the largest health shape.",
+			"Only set custom values if you know what you're doing.")]
+		public WDist AreaVictimScanRadius = new WDist(-1);
+
 		public IProjectile Create(ProjectileArgs args)
 		{
 			var c = UsePlayerColor ? args.SourceActor.Owner.Color.RGB : Color;
 			return new AreaBeam(this, args, c);
+		}
+
+		void IRulesetLoaded<WeaponInfo>.RulesetLoaded(Ruleset rules, WeaponInfo wi)
+		{
+			if (BlockerScanRadius < WDist.Zero)
+				BlockerScanRadius = Util.MinimumRequiredBlockerScanRadius(rules);
+
+			if (AreaVictimScanRadius < WDist.Zero)
+				AreaVictimScanRadius = Util.MinimumRequiredVictimScanRadius(rules);
 		}
 	}
 
@@ -93,6 +110,7 @@ namespace OpenRA.Mods.Common.Projectiles
 		int tailTicks;
 		bool isHeadTravelling = true;
 		bool isTailTravelling;
+		bool continueTracking = true;
 
 		bool IsBeamComplete { get { return !isHeadTravelling && headTicks >= length &&
 			!isTailTravelling && tailTicks >= length; } }
@@ -132,8 +150,44 @@ namespace OpenRA.Mods.Common.Projectiles
 			length = Math.Max((target - headPos).Length / speed.Length, 1);
 		}
 
+		void TrackTarget()
+		{
+			if (!continueTracking)
+				return;
+
+			if (args.GuidedTarget.IsValidFor(args.SourceActor))
+			{
+				var guidedTargetPos = args.Weapon.TargetActorCenter ? args.GuidedTarget.CenterPosition : args.GuidedTarget.Positions.PositionClosestTo(args.Source);
+				var targetDistance = new WDist((guidedTargetPos - args.Source).Length);
+
+				// Only continue tracking target if it's within weapon range +
+				// BeyondTargetRange to avoid edge case stuttering (start firing and immediately stop again).
+				if (targetDistance > args.Weapon.Range + info.BeyondTargetRange)
+					StopTargeting();
+				else
+				{
+					target = guidedTargetPos;
+					towardsTargetFacing = (target - args.Source).Yaw.Facing;
+
+					// Update the target position with the range we shoot beyond the target by
+					// I.e. we can deliberately overshoot, so aim for that position
+					var dir = new WVec(0, -1024, 0).Rotate(WRot.FromFacing(towardsTargetFacing));
+					target += dir * info.BeyondTargetRange.Length / 1024;
+				}
+			}
+		}
+
+		void StopTargeting()
+		{
+			continueTracking = false;
+			isTailTravelling = true;
+		}
+
 		public void Tick(World world)
 		{
+			if (info.TrackTarget)
+				TrackTarget();
+
 			if (++headTicks >= length)
 			{
 				headPos = target;
@@ -148,14 +202,14 @@ namespace OpenRA.Mods.Common.Projectiles
 				tailPos = args.Source;
 			}
 
-			// Allow for 1 cell (1024) leniency to avoid edge case stuttering (start firing and immediately stop again).
-			var outOfWeaponRange = args.Weapon.Range.Length + 1024 < (args.PassiveTarget - args.Source).Length;
+			// Allow for leniency to avoid edge case stuttering (start firing and immediately stop again).
+			var outOfWeaponRange = args.Weapon.Range + info.BeyondTargetRange < new WDist((args.PassiveTarget - args.Source).Length);
 
 			// While the head is travelling, the tail must start to follow Duration ticks later.
 			// Alternatively, also stop emitting the beam if source actor dies or is ordered to stop.
 			if ((headTicks >= info.Duration && !isTailTravelling) || args.SourceActor.IsDead ||
 				!actorAttackBase.IsAttacking || outOfWeaponRange)
-				isTailTravelling = true;
+				StopTargeting();
 
 			if (isTailTravelling)
 			{
@@ -171,7 +225,7 @@ namespace OpenRA.Mods.Common.Projectiles
 			// Check for blocking actors
 			WPos blockedPos;
 			if (info.Blockable && BlocksProjectiles.AnyBlockingActorsBetween(world, tailPos, headPos,
-				info.Width, info.TargetExtraSearchRadius, out blockedPos))
+				info.Width, info.BlockerScanRadius, out blockedPos))
 			{
 				headPos = blockedPos;
 				target = headPos;
@@ -181,7 +235,7 @@ namespace OpenRA.Mods.Common.Projectiles
 			// Damage is applied to intersected actors every DamageInterval ticks
 			if (headTicks % info.DamageInterval == 0)
 			{
-				var actors = world.FindActorsOnLine(tailPos, headPos, info.Width, info.TargetExtraSearchRadius);
+				var actors = world.FindActorsOnLine(tailPos, headPos, info.Width, info.AreaVictimScanRadius);
 				foreach (var a in actors)
 				{
 					var adjustedModifiers = args.DamageModifiers.Append(GetFalloff((args.Source - a.CenterPosition).Length));

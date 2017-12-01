@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -33,6 +33,7 @@ namespace OpenRA.Mods.Common.Widgets
 		public PaletteReference IconDarkenPalette;
 		public float2 Pos;
 		public List<ProductionItem> Queued;
+		public ProductionQueue ProductionQueue;
 	}
 
 	public class ProductionPaletteWidget : Widget
@@ -66,6 +67,7 @@ namespace OpenRA.Mods.Common.Widgets
 		public event Action<int, int> OnIconCountChanged = (a, b) => { };
 
 		public ProductionIcon TooltipIcon { get; private set; }
+		public Func<ProductionIcon> GetTooltipIcon;
 		public readonly World World;
 		readonly OrderManager orderManager;
 
@@ -98,6 +100,7 @@ namespace OpenRA.Mods.Common.Widgets
 			this.orderManager = orderManager;
 			World = world;
 			this.worldRenderer = worldRenderer;
+			GetTooltipIcon = () => TooltipIcon;
 			tooltipContainer = Exts.Lazy(() =>
 				Ui.Root.Get<TooltipContainerWidget>(TooltipContainer));
 
@@ -164,7 +167,7 @@ namespace OpenRA.Mods.Common.Widgets
 		{
 			if (TooltipContainer != null)
 				tooltipContainer.Value.SetTooltip(TooltipTemplate,
-					new WidgetArgs() { { "world", World }, { "palette", this } });
+					new WidgetArgs() { { "player", World.LocalPlayer }, { "getTooltipIcon", GetTooltipIcon } });
 		}
 
 		public override void MouseExited()
@@ -197,7 +200,7 @@ namespace OpenRA.Mods.Common.Widgets
 
 			if (item != null && item.Done && actor.HasTraitInfo<BuildingInfo>())
 			{
-				World.OrderGenerator = new PlaceBuildingOrderGenerator(CurrentQueue, icon.Name);
+				World.OrderGenerator = new PlaceBuildingOrderGenerator(CurrentQueue, icon.Name, worldRenderer);
 				return true;
 			}
 
@@ -218,14 +221,14 @@ namespace OpenRA.Mods.Common.Widgets
 		{
 			if (PickUpCompletedBuildingIcon(icon, item))
 			{
-				Game.Sound.Play(TabClick);
+				Game.Sound.Play(SoundType.UI, TabClick);
 				return true;
 			}
 
 			if (item != null && item.Paused)
 			{
 				// Resume a paused item
-				Game.Sound.Play(TabClick);
+				Game.Sound.Play(SoundType.UI, TabClick);
 				World.IssueOrder(Order.PauseProduction(CurrentQueue.Actor, icon.Name, false));
 				return true;
 			}
@@ -233,7 +236,7 @@ namespace OpenRA.Mods.Common.Widgets
 			if (CurrentQueue.BuildableItems().Any(a => a.Name == icon.Name))
 			{
 				// Queue a new item
-				Game.Sound.Play(TabClick);
+				Game.Sound.Play(SoundType.UI, TabClick);
 				Game.Sound.PlayNotification(World.Map.Rules, World.LocalPlayer, "Speech", CurrentQueue.Info.QueuedAudio, World.LocalPlayer.Faction.InternalName);
 				World.IssueOrder(Order.StartProduction(CurrentQueue.Actor, icon.Name, handleCount));
 				return true;
@@ -247,7 +250,7 @@ namespace OpenRA.Mods.Common.Widgets
 			if (item == null)
 				return false;
 
-			Game.Sound.Play(TabClick);
+			Game.Sound.Play(SoundType.UI, TabClick);
 
 			if (item.Paused || item.Done || item.TotalCost == item.RemainingCost)
 			{
@@ -271,7 +274,7 @@ namespace OpenRA.Mods.Common.Widgets
 				return false;
 
 			// Directly cancel, skipping "on-hold"
-			Game.Sound.Play(TabClick);
+			Game.Sound.Play(SoundType.UI, TabClick);
 			Game.Sound.PlayNotification(World.Map.Rules, World.LocalPlayer, "Speech", CurrentQueue.Info.CancelledAudio, World.LocalPlayer.Faction.InternalName);
 			World.IssueOrder(Order.CancelProduction(CurrentQueue.Actor, icon.Name, handleCount));
 
@@ -289,7 +292,7 @@ namespace OpenRA.Mods.Common.Widgets
 				: false;
 
 			if (!handled)
-				Game.Sound.Play(DisabledTabClick);
+				Game.Sound.Play(SoundType.UI, DisabledTabClick);
 
 			return true;
 		}
@@ -338,9 +341,8 @@ namespace OpenRA.Mods.Common.Widgets
 
 				var rsi = item.TraitInfo<RenderSpritesInfo>();
 				var icon = new Animation(World, rsi.GetImage(item, World.Map.Rules.Sequences, faction));
-				icon.Play(item.TraitInfo<TooltipInfo>().Icon);
-
 				var bi = item.TraitInfo<BuildableInfo>();
+				icon.Play(bi.Icon);
 
 				var pi = new ProductionIcon()
 				{
@@ -352,7 +354,8 @@ namespace OpenRA.Mods.Common.Widgets
 					IconClockPalette = worldRenderer.Palette(ClockPalette),
 					IconDarkenPalette = worldRenderer.Palette(NotBuildablePalette),
 					Pos = new float2(rect.Location),
-					Queued = CurrentQueue.AllQueued().Where(a => a.Item == item.Name).ToList()
+					Queued = currentQueue.AllQueued().Where(a => a.Item == item.Name).ToList(),
+					ProductionQueue = currentQueue
 				};
 
 				icons.Add(rect, pi);

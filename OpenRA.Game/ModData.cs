@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -13,7 +13,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using OpenRA.FileSystem;
 using OpenRA.Graphics;
 using OpenRA.Widgets;
@@ -27,11 +26,12 @@ namespace OpenRA
 		public readonly ObjectCreator ObjectCreator;
 		public readonly WidgetLoader WidgetLoader;
 		public readonly MapCache MapCache;
+		public readonly IPackageLoader[] PackageLoaders;
 		public readonly ISoundLoader[] SoundLoaders;
 		public readonly ISpriteLoader[] SpriteLoaders;
 		public readonly ISpriteSequenceLoader SpriteSequenceLoader;
+		public readonly IModelSequenceLoader ModelSequenceLoader;
 		public ILoadScreen LoadScreen { get; private set; }
-		public VoxelLoader VoxelLoader { get; private set; }
 		public CursorProvider CursorProvider { get; private set; }
 		public FS ModFiles;
 		public IReadOnlyFileSystem DefaultFileSystem { get { return ModFiles; } }
@@ -49,13 +49,13 @@ namespace OpenRA
 		{
 			Languages = new string[0];
 
-			ModFiles = new FS(mods);
-
 			// Take a local copy of the manifest
 			Manifest = new Manifest(mod.Id, mod.Package);
-			ModFiles.LoadFromManifest(Manifest);
+			ObjectCreator = new ObjectCreator(Manifest, mods);
+			PackageLoaders = ObjectCreator.GetLoaders<IPackageLoader>(Manifest.PackageFormats, "package");
 
-			ObjectCreator = new ObjectCreator(Manifest, ModFiles);
+			ModFiles = new FS(mods, PackageLoaders);
+			ModFiles.LoadFromManifest(Manifest);
 			Manifest.LoadCustomData(ObjectCreator);
 
 			if (useLoadScreen)
@@ -68,17 +68,26 @@ namespace OpenRA
 			WidgetLoader = new WidgetLoader(this);
 			MapCache = new MapCache(this);
 
-			SoundLoaders = GetLoaders<ISoundLoader>(Manifest.SoundFormats, "sound");
-			SpriteLoaders = GetLoaders<ISpriteLoader>(Manifest.SpriteFormats, "sprite");
+			SoundLoaders = ObjectCreator.GetLoaders<ISoundLoader>(Manifest.SoundFormats, "sound");
+			SpriteLoaders = ObjectCreator.GetLoaders<ISpriteLoader>(Manifest.SpriteFormats, "sprite");
 
 			var sequenceFormat = Manifest.Get<SpriteSequenceFormat>();
 			var sequenceLoader = ObjectCreator.FindType(sequenceFormat.Type + "Loader");
-			var ctor = sequenceLoader != null ? sequenceLoader.GetConstructor(new[] { typeof(ModData) }) : null;
-			if (sequenceLoader == null || !sequenceLoader.GetInterfaces().Contains(typeof(ISpriteSequenceLoader)) || ctor == null)
+			var sequenceCtor = sequenceLoader != null ? sequenceLoader.GetConstructor(new[] { typeof(ModData) }) : null;
+			if (sequenceLoader == null || !sequenceLoader.GetInterfaces().Contains(typeof(ISpriteSequenceLoader)) || sequenceCtor == null)
 				throw new InvalidOperationException("Unable to find a sequence loader for type '{0}'.".F(sequenceFormat.Type));
 
-			SpriteSequenceLoader = (ISpriteSequenceLoader)ctor.Invoke(new[] { this });
+			SpriteSequenceLoader = (ISpriteSequenceLoader)sequenceCtor.Invoke(new[] { this });
 			SpriteSequenceLoader.OnMissingSpriteError = s => Log.Write("debug", s);
+
+			var modelFormat = Manifest.Get<ModelSequenceFormat>();
+			var modelLoader = ObjectCreator.FindType(modelFormat.Type + "Loader");
+			var modelCtor = modelLoader != null ? modelLoader.GetConstructor(new[] { typeof(ModData) }) : null;
+			if (modelLoader == null || !modelLoader.GetInterfaces().Contains(typeof(IModelSequenceLoader)) || modelCtor == null)
+				throw new InvalidOperationException("Unable to find a model loader for type '{0}'.".F(modelFormat.Type));
+
+			ModelSequenceLoader = (IModelSequenceLoader)modelCtor.Invoke(new[] { this });
+			ModelSequenceLoader.OnMissingModelError = s => Log.Write("debug", s);
 
 			defaultRules = Exts.Lazy(() => Ruleset.LoadDefaults(this));
 			defaultTileSets = Exts.Lazy(() =>
@@ -122,26 +131,7 @@ namespace OpenRA
 
 			Game.Sound.Initialize(SoundLoaders, fileSystem);
 
-			if (VoxelLoader != null)
-				VoxelLoader.Dispose();
-			VoxelLoader = new VoxelLoader(fileSystem);
-
 			CursorProvider = new CursorProvider(this);
-		}
-
-		TLoader[] GetLoaders<TLoader>(IEnumerable<string> formats, string name)
-		{
-			var loaders = new List<TLoader>();
-			foreach (var format in formats)
-			{
-				var loader = ObjectCreator.FindType(format + "Loader");
-				if (loader == null || !loader.GetInterfaces().Contains(typeof(TLoader)))
-					throw new InvalidOperationException("Unable to find a {0} loader for type '{1}'.".F(name, format));
-
-				loaders.Add((TLoader)ObjectCreator.CreateBasic(loader));
-			}
-
-			return loaders.ToArray();
 		}
 
 		public IEnumerable<string> Languages { get; private set; }
@@ -204,9 +194,6 @@ namespace OpenRA
 				foreach (var entry in map.Rules.Music)
 					entry.Value.Load(map);
 
-			VoxelProvider.Initialize(VoxelLoader, map, MiniYaml.Load(map, Manifest.VoxelSequences, map.VoxelSequenceDefinitions));
-			VoxelLoader.Finish();
-
 			return map;
 		}
 
@@ -215,16 +202,27 @@ namespace OpenRA
 			if (LoadScreen != null)
 				LoadScreen.Dispose();
 			MapCache.Dispose();
-			if (VoxelLoader != null)
-				VoxelLoader.Dispose();
+
+			if (ObjectCreator != null)
+				ObjectCreator.Dispose();
 		}
 	}
 
 	public interface ILoadScreen : IDisposable
 	{
+		/// <summary>Initializes the loadscreen with yaml data from the LoadScreen block in mod.yaml.</summary>
 		void Init(ModData m, Dictionary<string, string> info);
+
+		/// <summary>Called at arbitrary times during mod load to rerender the loadscreen.</summary>
 		void Display();
-		bool RequiredContentIsInstalled();
+
+		/// <summary>
+		/// Called before loading the mod assets.
+		/// Returns false if mod loading should be aborted (e.g. switching to another mod instead).
+		/// </summary>
+		bool BeforeLoad();
+
+		/// <summary>Called when the engine expects to connect to a server/replay or load the shellmap.</summary>
 		void StartGame(Arguments args);
 	}
 }

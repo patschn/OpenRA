@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -20,7 +20,7 @@ using OpenRA.Traits;
 namespace OpenRA.Mods.Common.Traits
 {
 	[Desc("This actor can transport Passenger actors.")]
-	public class CargoInfo : ITraitInfo, Requires<IOccupySpaceInfo>, Requires<UpgradeManagerInfo>
+	public class CargoInfo : ITraitInfo, Requires<IOccupySpaceInfo>
 	{
 		[Desc("The maximum sum of Passenger.Weight that this actor can support.")]
 		public readonly int MaxWeight = 0;
@@ -55,27 +55,42 @@ namespace OpenRA.Mods.Common.Traits
 		[Desc("Cursor to display when unable to unload the passengers.")]
 		public readonly string UnloadBlockedCursor = "deploy-blocked";
 
-		[UpgradeGrantedReference]
-		[Desc("The upgrades to grant to self while loading cargo.")]
-		public readonly string[] LoadingUpgrades = { };
+		[GrantedConditionReference]
+		[Desc("The condition to grant to self while waiting for cargo to load.")]
+		public readonly string LoadingCondition = null;
+
+		[GrantedConditionReference]
+		[Desc("The condition to grant to self while passengers are loaded.",
+			"Condition can stack with multiple passengers.")]
+		public readonly string LoadedCondition = null;
+
+		[Desc("Conditions to grant when specified actors are loaded inside the transport.",
+			"A dictionary of [actor id]: [condition].")]
+		public readonly Dictionary<string, string> PassengerConditions = new Dictionary<string, string>();
+
+		[GrantedConditionReference]
+		public IEnumerable<string> LinterPassengerConditions { get { return PassengerConditions.Values; } }
 
 		public object Create(ActorInitializer init) { return new Cargo(init, this); }
 	}
 
 	public class Cargo : IPips, IIssueOrder, IResolveOrder, IOrderVoice, INotifyCreated, INotifyKilled,
-		INotifyOwnerChanged, INotifyAddedToWorld, ITick, INotifySold, INotifyActorDisposing
+		INotifyOwnerChanged, INotifyAddedToWorld, ITick, INotifySold, INotifyActorDisposing, IIssueDeployOrder
 	{
 		public readonly CargoInfo Info;
 		readonly Actor self;
-		readonly UpgradeManager upgradeManager;
 		readonly Stack<Actor> cargo = new Stack<Actor>();
 		readonly HashSet<Actor> reserves = new HashSet<Actor>();
+		readonly Dictionary<string, Stack<int>> passengerTokens = new Dictionary<string, Stack<int>>();
 		readonly Lazy<IFacing> facing;
 		readonly bool checkTerrainType;
 
 		int totalWeight = 0;
 		int reservedWeight = 0;
 		Aircraft aircraft;
+		ConditionManager conditionManager;
+		int loadingToken = ConditionManager.InvalidConditionToken;
+		Stack<int> loadedTokens = new Stack<int>();
 
 		CPos currentCell;
 		public IEnumerable<CPos> CurrentAdjacentCells { get; private set; }
@@ -89,7 +104,6 @@ namespace OpenRA.Mods.Common.Traits
 			Info = info;
 			Unloading = false;
 			checkTerrainType = info.UnloadTerrainTypes.Count > 0;
-			upgradeManager = self.Trait<UpgradeManager>();
 
 			if (init.Contains<RuntimeCargoInit>())
 			{
@@ -124,9 +138,10 @@ namespace OpenRA.Mods.Common.Traits
 			facing = Exts.Lazy(self.TraitOrDefault<IFacing>);
 		}
 
-		public void Created(Actor self)
+		void INotifyCreated.Created(Actor self)
 		{
 			aircraft = self.TraitOrDefault<Aircraft>();
+			conditionManager = self.Trait<ConditionManager>();
 		}
 
 		static int GetWeight(Actor a) { return a.Info.TraitInfo<PassengerInfo>().Weight; }
@@ -143,6 +158,11 @@ namespace OpenRA.Mods.Common.Traits
 				return new Order(order.OrderID, self, queued);
 
 			return null;
+		}
+
+		Order IIssueDeployOrder.IssueDeployOrder(Actor self)
+		{
+			return new Order("Unload", self, false);
 		}
 
 		public void ResolveOrder(Actor self, Order order)
@@ -193,9 +213,8 @@ namespace OpenRA.Mods.Common.Traits
 			if (!HasSpace(w))
 				return false;
 
-			if (reserves.Count == 0)
-				foreach (var u in Info.LoadingUpgrades)
-					upgradeManager.GrantUpgrade(self, u, this);
+			if (conditionManager != null && loadingToken == ConditionManager.InvalidConditionToken && !string.IsNullOrEmpty(Info.LoadingCondition))
+				loadingToken = conditionManager.GrantCondition(self, Info.LoadingCondition);
 
 			reserves.Add(a);
 			reservedWeight += w;
@@ -211,9 +230,8 @@ namespace OpenRA.Mods.Common.Traits
 			reservedWeight -= GetWeight(a);
 			reserves.Remove(a);
 
-			if (reserves.Count == 0)
-				foreach (var u in Info.LoadingUpgrades)
-					upgradeManager.RevokeUpgrade(self, u, this);
+			if (loadingToken != ConditionManager.InvalidConditionToken)
+				loadingToken = conditionManager.RevokeCondition(self, loadingToken);
 		}
 
 		public string CursorForOrder(Actor self, Order order)
@@ -251,8 +269,12 @@ namespace OpenRA.Mods.Common.Traits
 			var p = a.Trait<Passenger>();
 			p.Transport = null;
 
-			foreach (var u in p.Info.GrantUpgrades)
-				upgradeManager.RevokeUpgrade(self, u, p);
+			Stack<int> passengerToken;
+			if (passengerTokens.TryGetValue(a.Info.Name, out passengerToken) && passengerToken.Any())
+				conditionManager.RevokeCondition(self, passengerToken.Pop());
+
+			if (loadedTokens.Any())
+				conditionManager.RevokeCondition(self, loadedTokens.Pop());
 
 			return a;
 		}
@@ -304,9 +326,8 @@ namespace OpenRA.Mods.Common.Traits
 				reservedWeight -= w;
 				reserves.Remove(a);
 
-				if (reserves.Count == 0)
-					foreach (var u in Info.LoadingUpgrades)
-						upgradeManager.RevokeUpgrade(self, u, this);
+				if (loadingToken != ConditionManager.InvalidConditionToken)
+					loadingToken = conditionManager.RevokeCondition(self, loadingToken);
 			}
 
 			// If not initialized then this will be notified in the first tick
@@ -316,11 +337,16 @@ namespace OpenRA.Mods.Common.Traits
 
 			var p = a.Trait<Passenger>();
 			p.Transport = self;
-			foreach (var u in p.Info.GrantUpgrades)
-				upgradeManager.GrantUpgrade(self, u, p);
+
+			string passengerCondition;
+			if (conditionManager != null && Info.PassengerConditions.TryGetValue(a.Info.Name, out passengerCondition))
+				passengerTokens.GetOrAdd(a.Info.Name).Push(conditionManager.GrantCondition(self, passengerCondition));
+
+			if (conditionManager != null && !string.IsNullOrEmpty(Info.LoadedCondition))
+				loadedTokens.Push(conditionManager.GrantCondition(self, Info.LoadedCondition));
 		}
 
-		public void Killed(Actor self, AttackInfo e)
+		void INotifyKilled.Killed(Actor self, AttackInfo e)
 		{
 			if (Info.EjectOnDeath)
 				while (!IsEmpty(self) && CanUnload())
@@ -348,7 +374,7 @@ namespace OpenRA.Mods.Common.Traits
 			cargo.Clear();
 		}
 
-		public void Disposing(Actor self)
+		void INotifyActorDisposing.Disposing(Actor self)
 		{
 			foreach (var c in cargo)
 				c.Dispose();
@@ -356,8 +382,8 @@ namespace OpenRA.Mods.Common.Traits
 			cargo.Clear();
 		}
 
-		public void Selling(Actor self) { }
-		public void Sold(Actor self)
+		void INotifySold.Selling(Actor self) { }
+		void INotifySold.Sold(Actor self)
 		{
 			if (!Info.EjectOnSell || cargo == null)
 				return;
@@ -377,19 +403,16 @@ namespace OpenRA.Mods.Common.Traits
 			});
 		}
 
-		public void OnOwnerChanged(Actor self, Player oldOwner, Player newOwner)
+		void INotifyOwnerChanged.OnOwnerChanged(Actor self, Player oldOwner, Player newOwner)
 		{
 			if (cargo == null)
 				return;
 
-			self.World.AddFrameEndTask(w =>
-			{
-				foreach (var p in Passengers)
-					p.Owner = newOwner;
-			});
+			foreach (var p in Passengers)
+				p.ChangeOwner(newOwner);
 		}
 
-		public void AddedToWorld(Actor self)
+		void INotifyAddedToWorld.AddedToWorld(Actor self)
 		{
 			// Force location update to avoid issues when initial spawn is outside map
 			currentCell = self.Location;
@@ -397,7 +420,7 @@ namespace OpenRA.Mods.Common.Traits
 		}
 
 		bool initialized;
-		public void Tick(Actor self)
+		void ITick.Tick(Actor self)
 		{
 			// Notify initial cargo load
 			if (!initialized)
@@ -421,12 +444,6 @@ namespace OpenRA.Mods.Common.Traits
 			}
 		}
 	}
-
-	[RequireExplicitImplementation]
-	public interface INotifyPassengerEntered { void OnPassengerEntered(Actor self, Actor passenger); }
-
-	[RequireExplicitImplementation]
-	public interface INotifyPassengerExited { void OnPassengerExited(Actor self, Actor passenger); }
 
 	public class RuntimeCargoInit : IActorInit<Actor[]>, ISuppressInitExport
 	{

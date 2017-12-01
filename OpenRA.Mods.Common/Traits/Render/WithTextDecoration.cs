@@ -1,6 +1,6 @@
-﻿#region Copyright & License Information
+#region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -20,7 +20,7 @@ using OpenRA.Traits;
 namespace OpenRA.Mods.Common.Traits.Render
 {
 	[Desc("Displays a text overlay relative to the selection box.")]
-	public class WithTextDecorationInfo : UpgradableTraitInfo, IRulesetLoaded
+	public class WithTextDecorationInfo : ConditionalTraitInfo
 	{
 		[FieldLoader.Require] [Translate] public readonly string Text = null;
 
@@ -47,14 +47,16 @@ namespace OpenRA.Mods.Common.Traits.Render
 
 		public override object Create(ActorInitializer init) { return new WithTextDecoration(init.Self, this); }
 
-		void IRulesetLoaded<ActorInfo>.RulesetLoaded(Ruleset rules, ActorInfo info)
+		public override void RulesetLoaded(Ruleset rules, ActorInfo ai)
 		{
 			if (!Game.ModData.Manifest.Fonts.ContainsKey(Font))
 				throw new YamlException("Font '{0}' is not listed in the mod.yaml's Fonts section".F(Font));
+
+			base.RulesetLoaded(rules, ai);
 		}
 	}
 
-	public class WithTextDecoration : UpgradableTrait<WithTextDecorationInfo>, IRender, IRenderAboveShroudWhenSelected, INotifyCapture
+	public class WithTextDecoration : ConditionalTrait<WithTextDecorationInfo>, IRender, IRenderAboveShroudWhenSelected, INotifyCapture
 	{
 		readonly SpriteFont font;
 		Color color;

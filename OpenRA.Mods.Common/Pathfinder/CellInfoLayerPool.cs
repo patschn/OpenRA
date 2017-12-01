@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -57,21 +57,28 @@ namespace OpenRA.Mods.Common.Pathfinder
 
 		public class PooledCellInfoLayer : IDisposable
 		{
-			public CellLayer<CellInfo> Layer { get; private set; }
 			CellInfoLayerPool layerPool;
+			List<CellLayer<CellInfo>> layers = new List<CellLayer<CellInfo>>();
 
 			public PooledCellInfoLayer(CellInfoLayerPool layerPool)
 			{
 				this.layerPool = layerPool;
-				Layer = layerPool.GetLayer();
+			}
+
+			public CellLayer<CellInfo> GetLayer()
+			{
+				var layer = layerPool.GetLayer();
+				layers.Add(layer);
+				return layer;
 			}
 
 			public void Dispose()
 			{
-				if (Layer == null)
-					return;
-				layerPool.ReturnLayer(Layer);
-				Layer = null;
+				if (layerPool != null)
+					foreach (var layer in layers)
+						layerPool.ReturnLayer(layer);
+
+				layers = null;
 				layerPool = null;
 			}
 		}

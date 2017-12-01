@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -14,7 +14,6 @@ using System.Collections.Generic;
 using System.Linq;
 using OpenRA.Effects;
 using OpenRA.FileFormats;
-using OpenRA.GameRules;
 using OpenRA.Graphics;
 using OpenRA.Network;
 using OpenRA.Orders;
@@ -41,6 +40,7 @@ namespace OpenRA
 		public Session LobbyInfo { get { return OrderManager.LobbyInfo; } }
 
 		public readonly MersenneTwister SharedRandom;
+		public readonly IModelCache ModelCache;
 
 		public Player[] Players = new Player[0];
 
@@ -107,7 +107,7 @@ namespace OpenRA
 
 		public readonly Map Map;
 
-		public readonly ActorMap ActorMap;
+		public readonly IActorMap ActorMap;
 		public readonly ScreenMap ScreenMap;
 		public readonly WorldType Type;
 
@@ -148,7 +148,7 @@ namespace OpenRA
 			}
 		}
 
-		internal World(Map map, OrderManager orderManager, WorldType type)
+		internal World(ModData modData, Map map, OrderManager orderManager, WorldType type)
 		{
 			Type = type;
 			OrderManager = orderManager;
@@ -157,9 +157,11 @@ namespace OpenRA
 			Timestep = orderManager.LobbyInfo.GlobalSettings.Timestep;
 			SharedRandom = new MersenneTwister(orderManager.LobbyInfo.GlobalSettings.RandomSeed);
 
+			ModelCache = modData.ModelSequenceLoader.CacheModels(map, modData, map.Rules.ModelSequences);
+
 			var worldActorType = type == WorldType.Editor ? "EditorWorld" : "World";
 			WorldActor = CreateActor(worldActorType, new TypeDictionary());
-			ActorMap = WorldActor.Trait<ActorMap>();
+			ActorMap = WorldActor.Trait<IActorMap>();
 			ScreenMap = WorldActor.Trait<ScreenMap>();
 
 			// Add players
@@ -240,6 +242,11 @@ namespace OpenRA
 				rc.Metadata = new ReplayMetadata(gameInfo);
 		}
 
+		public void SetWorldOwner(Player p)
+		{
+			WorldActor.Owner = p;
+		}
+
 		public Actor CreateActor(string name, TypeDictionary initDict)
 		{
 			return CreateActor(true, name, initDict);
@@ -302,7 +309,6 @@ namespace OpenRA
 		public event Action<Actor> ActorAdded = _ => { };
 		public event Action<Actor> ActorRemoved = _ => { };
 
-		public bool ShouldTick { get { return Type != WorldType.Shellmap || Game.Settings.Game.ShowShellmap; } }
 		public bool Paused { get; internal set; }
 		public bool PredictedPaused { get; internal set; }
 		public bool PauseStateLocked { get; set; }
@@ -433,6 +439,8 @@ namespace OpenRA
 
 			Game.Sound.StopAudio();
 			Game.Sound.StopVideo();
+
+			ModelCache.Dispose();
 
 			// Dispose newer actors first, and the world actor last
 			foreach (var a in actors.Values.Reverse())

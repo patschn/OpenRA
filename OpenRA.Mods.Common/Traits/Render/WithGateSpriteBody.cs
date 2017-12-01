@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -45,30 +45,30 @@ namespace OpenRA.Mods.Common.Traits.Render
 		}
 	}
 
-	class WithGateSpriteBody : WithSpriteBody, INotifyRemovedFromWorld, INotifyBuildComplete, IWallConnector, ITick
+	class WithGateSpriteBody : WithSpriteBody, INotifyRemovedFromWorld, IWallConnector, ITick
 	{
-		readonly WithGateSpriteBodyInfo gateInfo;
+		readonly WithGateSpriteBodyInfo gateBodyInfo;
 		readonly Gate gate;
 		bool renderOpen;
 
 		public WithGateSpriteBody(ActorInitializer init, WithGateSpriteBodyInfo info)
 			: base(init, info, () => 0)
 		{
-			gateInfo = info;
+			gateBodyInfo = info;
 			gate = init.Self.Trait<Gate>();
 		}
 
 		void UpdateState(Actor self)
 		{
 			if (renderOpen)
-				DefaultAnimation.PlayRepeating(NormalizeSequence(self, gateInfo.OpenSequence));
+				DefaultAnimation.PlayRepeating(NormalizeSequence(self, gateBodyInfo.OpenSequence));
 			else
 				DefaultAnimation.PlayFetchIndex(NormalizeSequence(self, Info.Sequence), GetGateFrame);
 		}
 
 		void ITick.Tick(Actor self)
 		{
-			if (gateInfo.OpenSequence == null)
+			if (gateBodyInfo.OpenSequence == null)
 				return;
 
 			if (gate.Position == gate.OpenPosition ^ renderOpen)
@@ -83,12 +83,12 @@ namespace OpenRA.Mods.Common.Traits.Render
 			return int2.Lerp(0, DefaultAnimation.CurrentSequence.Length - 1, gate.Position, gate.OpenPosition);
 		}
 
-		public override void DamageStateChanged(Actor self, AttackInfo e)
+		protected override void DamageStateChanged(Actor self)
 		{
 			UpdateState(self);
 		}
 
-		public override void BuildingComplete(Actor self)
+		protected override void OnBuildComplete(Actor self)
 		{
 			UpdateState(self);
 			UpdateNeighbours(self);
@@ -96,7 +96,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 
 		void UpdateNeighbours(Actor self)
 		{
-			var footprint = FootprintUtils.Tiles(self).ToArray();
+			var footprint = gate.Info.Tiles(self.Location).ToArray();
 			var adjacent = Util.ExpandFootprint(footprint, true).Except(footprint)
 				.Where(self.World.Map.Contains).ToList();
 
@@ -107,7 +107,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 				rb.SetDirty();
 		}
 
-		public void RemovedFromWorld(Actor self)
+		void INotifyRemovedFromWorld.RemovedFromWorld(Actor self)
 		{
 			UpdateNeighbours(self);
 		}
@@ -115,7 +115,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 		bool IWallConnector.AdjacentWallCanConnect(Actor self, CPos wallLocation, string wallType, out CVec facing)
 		{
 			facing = wallLocation - self.Location;
-			return wallType == gateInfo.Type && gateInfo.WallConnections.Contains(facing);
+			return wallType == gateBodyInfo.Type && gateBodyInfo.WallConnections.Contains(facing);
 		}
 
 		void IWallConnector.SetDirty() { }

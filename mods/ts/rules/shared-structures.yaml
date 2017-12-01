@@ -8,19 +8,20 @@ GACNST:
 		Queue: Building
 		BuildPaletteOrder: 1000
 		Prerequisites: ~disabled
+		Description: Builds base structures.
 	Health:
 		HP: 1500
 	Armor:
 		Type: Wood
 	RevealsShroud:
 		Range: 5c0
+		MaxHeightDelta: 3
 	Production:
 		Produces: Building,Defense
 	Valued:
 		Cost: 2500
 	Tooltip:
 		Name: Construction Yard
-		Description: Builds base structures.
 	CustomSellValue:
 		Value: 2500
 	BaseBuilding:
@@ -59,11 +60,11 @@ PROC:
 		Cost: 2000
 	Tooltip:
 		Name: Tiberium Refinery
-		Description: Processes raw Tiberium\ninto useable resources.
 	Buildable:
 		Queue: Building
-		BuildPaletteOrder: 20
-		Prerequisites: anypower
+		BuildPaletteOrder: 50
+		Prerequisites: anypower, ~techlevel.low
+		Description: Processes raw Tiberium\ninto useable resources.
 	Building:
 		Footprint: xxx= xx== xxx=
 		Dimensions: 4,3
@@ -73,14 +74,15 @@ PROC:
 		HP: 900
 	RevealsShroud:
 		Range: 6c0
+		MaxHeightDelta: 3
 	TiberianSunRefinery:
 		DockAngle: 160
 		DockOffset: 2,1
 		DiscardExcessResources: true
 	StoresResources:
 		PipColor: Green
-		PipCount: 15
-		Capacity: 3000
+		PipCount: 10
+		Capacity: 2000
 	CustomSellValue:
 		Value: 600
 	FreeActor:
@@ -105,18 +107,20 @@ PROC:
 		FactionImages:
 			gdi: proc.gdi
 			nod: proc.nod
+	Explodes:
+		Weapon: TiberiumExplosion
 
 GASILO:
 	Inherits: ^Building
 	Buildable:
 		Queue: Building
-		BuildPaletteOrder: 70
-		Prerequisites: proc
+		BuildPaletteOrder: 100
+		Prerequisites: proc, ~techlevel.low
+		Description: Stores excess Tiberium.
 	Valued:
 		Cost: 150
 	Tooltip:
 		Name: Silo
-		Description: Stores excess Tiberium.
 	Building:
 		Footprint: xx xx
 		Dimensions: 2, 2
@@ -129,6 +133,7 @@ GASILO:
 		Type: Wood
 	RevealsShroud:
 		Range: 4c0
+		MaxHeightDelta: 3
 	RenderSprites:
 		Image: gasilo.gdi
 		FactionImages:
@@ -141,39 +146,47 @@ GASILO:
 	WithIdleOverlay@LIGHTS:
 		Sequence: idle-lights
 	StoresResources:
+		PipColor: Green
 		PipCount: 5
 		Capacity: 1500
 	Power:
 		Amount: -10
 	SelectionDecorations:
 		VisualBounds: 80, 48, -5, 0
+	Explodes:
+		Weapon: TiberiumExplosion
 
 ANYPOWER:
 	AlwaysVisible:
 	Tooltip:
 		Name: Power Plant
+	Buildable:
 		Description: Power Plant
 
 BARRACKS:
 	AlwaysVisible:
 	Tooltip:
 		Name: Infantry Production
+	Buildable:
 		Description: Infantry Production
 
 FACTORY:
 	AlwaysVisible:
 	Tooltip:
 		Name: Vehicle Production
+	Buildable:
 		Description: Vehicle Production
 
 RADAR:
 	AlwaysVisible:
 	Tooltip:
 		Name: Radar
+	Buildable:
 		Description: Radar
 
 TECH:
 	AlwaysVisible:
 	Tooltip:
 		Name: Tech Center
+	Buildable:
 		Description: Tech Center

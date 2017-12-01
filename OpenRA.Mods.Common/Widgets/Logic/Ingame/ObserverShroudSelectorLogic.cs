@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -127,13 +127,13 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			var keyhandler = shroudSelector.Get<LogicKeyListenerWidget>("SHROUD_KEYHANDLER");
 			keyhandler.OnKeyPress = HandleKeyPress;
 
-			selected = limitViews ? groups.First().Value.First() : disableShroud;
+			selected = limitViews ? groups.First().Value.First() : world.WorldActor.Owner.Shroud.ExploreMapEnabled ? combined : disableShroud;
 			selected.OnClick();
 		}
 
 		public bool HandleKeyPress(KeyInput e)
 		{
-			if (e.Event == KeyInputEvent.Down)
+			if (e.Event == KeyInputEvent.Down && !e.IsRepeat)
 			{
 				var h = Hotkey.FromKeyInput(e);
 				if (h == Game.Settings.Keys.ObserverCombinedView && !limitViews)

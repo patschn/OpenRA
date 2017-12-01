@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -11,7 +11,11 @@
 
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Linq;
+using OpenRA.GameRules;
+using OpenRA.Graphics;
+using OpenRA.Mods.Common.Traits;
 using OpenRA.Support;
 using OpenRA.Traits;
 
@@ -85,7 +89,13 @@ namespace OpenRA.Mods.Common
 
 		public static WPos BetweenCells(World w, CPos from, CPos to)
 		{
-			return WPos.Lerp(w.Map.CenterOfCell(from), w.Map.CenterOfCell(to), 1, 2);
+			var fromPos = from.Layer == 0 ? w.Map.CenterOfCell(from) :
+				w.GetCustomMovementLayers()[from.Layer].CenterOfCell(from);
+
+			var toPos = to.Layer == 0 ? w.Map.CenterOfCell(to) :
+				w.GetCustomMovementLayers()[to.Layer].CenterOfCell(to);
+
+			return WPos.Lerp(fromPos, toPos, 1, 2);
 		}
 
 		public static IEnumerable<T> Shuffle<T>(this IEnumerable<T> ts, MersenneTwister random)
@@ -156,6 +166,89 @@ namespace OpenRA.Mods.Common
 				p += new CVec(dx, dy);
 				yield return p;
 			}
+		}
+
+		public static int RandomDelay(World world, int[] range)
+		{
+			if (range.Length == 0)
+				return 0;
+
+			if (range.Length == 1)
+				return range[0];
+
+			return world.SharedRandom.Next(range[0], range[1]);
+		}
+
+		// TODO: Investigate caching this or moving it to ActorMapInfo
+		public static WDist MinimumRequiredVictimScanRadius(Ruleset rules)
+		{
+			return rules.Actors.SelectMany(a => a.Value.TraitInfos<HitShapeInfo>()).Max(h => h.Type.OuterRadius);
+		}
+
+		// TODO: Investigate caching this or moving it to ActorMapInfo
+		public static WDist MinimumRequiredBlockerScanRadius(Ruleset rules)
+		{
+			return rules.Actors.Where(a => a.Value.HasTraitInfo<IBlocksProjectilesInfo>())
+				.SelectMany(a => a.Value.TraitInfos<HitShapeInfo>()).Max(h => h.Type.OuterRadius);
+		}
+
+		public static string FriendlyTypeName(Type t)
+		{
+			if (t.IsGenericType && t.GetGenericTypeDefinition() == typeof(HashSet<>))
+				return "Set of {0}".F(t.GetGenericArguments().Select(FriendlyTypeName).ToArray());
+
+			if (t.IsGenericType && t.GetGenericTypeDefinition() == typeof(Dictionary<,>))
+				return "Mapping of {0} to {1}".F(t.GetGenericArguments().Select(FriendlyTypeName).ToArray());
+
+			if (t.IsSubclassOf(typeof(Array)))
+				return "Collection of {0}".F(FriendlyTypeName(t.GetElementType()));
+
+			if (t.IsGenericType && t.GetGenericTypeDefinition().GetInterfaces().Any(e => e.IsGenericType && e.GetGenericTypeDefinition() == typeof(IEnumerable<>)))
+				return "Collection of {0}".F(FriendlyTypeName(t.GetGenericArguments().First()));
+
+			if (t == typeof(int) || t == typeof(uint))
+				return "Integer";
+
+			if (t == typeof(int2))
+				return "2D Integer";
+
+			if (t == typeof(float) || t == typeof(decimal))
+				return "Real Number";
+
+			if (t == typeof(float2))
+				return "2D Real Number";
+
+			if (t == typeof(CPos))
+				return "2D Cell Position";
+
+			if (t == typeof(CVec))
+				return "2D Cell Vector";
+
+			if (t == typeof(WAngle))
+				return "1D World Angle";
+
+			if (t == typeof(WRot))
+				return "3D World Rotation";
+
+			if (t == typeof(WPos))
+				return "3D World Position";
+
+			if (t == typeof(WDist))
+				return "1D World Distance";
+
+			if (t == typeof(WVec))
+				return "3D World Vector";
+
+			if (t == typeof(HSLColor) || t == typeof(Color))
+				return "Color (RRGGBB[AA] notation)";
+
+			if (t == typeof(IProjectileInfo))
+				return "Projectile";
+
+			if (t == typeof(IWarhead))
+				return "Warhead";
+
+			return t.Name;
 		}
 	}
 }

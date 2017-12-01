@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -194,9 +194,10 @@ namespace OpenRA.Mods.Common.Widgets
 
 				if (!flashed && !o.SuppressVisualFeedback)
 				{
-					if (o.TargetActor != null)
+					var visualTargetActor = o.VisualFeedbackTarget ?? o.TargetActor;
+					if (visualTargetActor != null)
 					{
-						world.AddFrameEndTask(w => w.Add(new FlashTarget(o.TargetActor)));
+						world.AddFrameEndTask(w => w.Add(new FlashTarget(visualTargetActor)));
 						flashed = true;
 					}
 					else if (o.TargetLocation != CPos.Zero)
@@ -241,7 +242,8 @@ namespace OpenRA.Mods.Common.Widgets
 			{
 				var key = Hotkey.FromKeyInput(e);
 
-				if (key == Game.Settings.Keys.PauseKey && World.LocalPlayer != null) // Disable pausing for spectators
+				if (key == Game.Settings.Keys.PauseKey
+					&& (Game.IsHost || (World.LocalPlayer != null && World.LocalPlayer.WinState != WinState.Lost))) // Disable pausing for spectators and defeated players
 					World.SetPauseState(!World.Paused);
 				else if (key == Game.Settings.Keys.SelectAllUnitsKey && !World.IsGameOver)
 				{
@@ -250,12 +252,12 @@ namespace OpenRA.Mods.Common.Widgets
 
 					// Check if selecting actors on the screen has selected new units
 					if (ownUnitsOnScreen.Count > World.Selection.Actors.Count())
-						Game.Debug("Selected across screen");
+						Game.AddChatLine(Color.White, "Battlefield Control", "Selected across screen");
 					else
 					{
 						// Select actors in the world that have highest selection priority
 						ownUnitsOnScreen = SelectActorsInWorld(World, null, player).SubsetWithHighestSelectionPriority().ToList();
-						Game.Debug("Selected across map");
+						Game.AddChatLine(Color.White, "Battlefield Control", "Selected across map");
 					}
 
 					World.Selection.Combine(World, ownUnitsOnScreen, false, false);
@@ -276,12 +278,12 @@ namespace OpenRA.Mods.Common.Widgets
 
 					// Check if selecting actors on the screen has selected new units
 					if (newSelection.Count > World.Selection.Actors.Count())
-						Game.Debug("Selected across screen");
+						Game.AddChatLine(Color.White, "Battlefield Control", "Selected across screen");
 					else
 					{
 						// Select actors in the world that have the same selection class as one of the already selected actors
 						newSelection = SelectActorsInWorld(World, selectedClasses, player).ToList();
-						Game.Debug("Selected across map");
+						Game.AddChatLine(Color.White, "Battlefield Control", "Selected across map");
 					}
 
 					World.Selection.Combine(World, newSelection, true, false);
@@ -369,12 +371,12 @@ namespace OpenRA.Mods.Common.Widgets
 			if (Game.Settings.Sound.Mute)
 			{
 				Game.Sound.MuteAudio();
-				Game.Debug("Audio muted");
+				Game.AddChatLine(Color.White, "Battlefield Control", "Audio muted");
 			}
 			else
 			{
 				Game.Sound.UnmuteAudio();
-				Game.Debug("Audio unmuted");
+				Game.AddChatLine(Color.White, "Battlefield Control", "Audio unmuted");
 			}
 
 			return true;

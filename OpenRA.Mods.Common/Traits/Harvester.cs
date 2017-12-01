@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -64,6 +64,12 @@ namespace OpenRA.Mods.Common.Traits
 		[Desc("Duration to wait before becoming idle again.")]
 		public readonly int WaitDuration = 25;
 
+		[Desc("Find a new refinery to unload at if more than this many harvesters are already waiting.")]
+		public readonly int MaxUnloadQueue = 3;
+
+		[Desc("The pathfinding cost penalty applied for each harvester waiting to unload at a refinery.")]
+		public readonly int UnloadQueueCostModifier = 12;
+
 		[VoiceReference] public readonly string HarvestVoice = "Action";
 		[VoiceReference] public readonly string DeliverVoice = "Action";
 
@@ -72,12 +78,15 @@ namespace OpenRA.Mods.Common.Traits
 
 	public class Harvester : IIssueOrder, IResolveOrder, IPips,
 		IExplodeModifier, IOrderVoice, ISpeedModifier, ISync, INotifyCreated,
-		INotifyResourceClaimLost, INotifyIdle, INotifyBlockingMove, INotifyBuildComplete
+		INotifyIdle, INotifyBlockingMove, INotifyBuildComplete
 	{
 		public readonly HarvesterInfo Info;
 		readonly Mobile mobile;
+		readonly ResourceLayer resLayer;
+		readonly ResourceClaimLayer claimLayer;
 		Dictionary<ResourceTypeInfo, int> contents = new Dictionary<ResourceTypeInfo, int>();
 		bool idleSmart = true;
+		int idleDuration;
 
 		[Sync] public Actor OwnerLinkedProc = null;
 		[Sync] public Actor LastLinkedProc = null;
@@ -101,16 +110,19 @@ namespace OpenRA.Mods.Common.Traits
 		{
 			Info = info;
 			mobile = self.Trait<Mobile>();
+			resLayer = self.World.WorldActor.Trait<ResourceLayer>();
+			claimLayer = self.World.WorldActor.Trait<ResourceClaimLayer>();
+
 			self.QueueActivity(new CallFunc(() => ChooseNewProc(self, null)));
 		}
 
-		public void Created(Actor self)
+		void INotifyCreated.Created(Actor self)
 		{
 			if (Info.SearchOnCreation)
 				self.QueueActivity(new FindResources(self));
 		}
 
-		public void BuildingComplete(Actor self)
+		void INotifyBuildComplete.BuildingComplete(Actor self)
 		{
 			if (Info.SearchOnCreation)
 				self.QueueActivity(new FindResources(self));
@@ -183,12 +195,12 @@ namespace OpenRA.Mods.Common.Traits
 
 					var occupancy = refs[loc].Occupancy;
 
-					// 4 harvesters clogs up the refinery's delivery location:
-					if (occupancy >= 3)
+					// Too many harvesters clogs up the refinery's delivery location:
+					if (occupancy >= Info.MaxUnloadQueue)
 						return Constants.InvalidNode;
 
 					// Prefer refineries with less occupancy (multiplier is to offset distance cost):
-					return occupancy * 12;
+					return occupancy * Info.UnloadQueueCostModifier;
 				}))
 				path = self.World.WorldActor.Trait<IPathFinder>().FindPath(search);
 
@@ -204,8 +216,10 @@ namespace OpenRA.Mods.Common.Traits
 
 		public void AcceptResource(ResourceType type)
 		{
-			if (!contents.ContainsKey(type.Info)) contents[type.Info] = 1;
-			else contents[type.Info]++;
+			if (!contents.ContainsKey(type.Info))
+				contents[type.Info] = 1;
+			else
+				contents[type.Info]++;
 		}
 
 		public void UnblockRefinery(Actor self)
@@ -233,10 +247,10 @@ namespace OpenRA.Mods.Common.Traits
 			}
 		}
 
-		public void OnNotifyBlockingMove(Actor self, Actor blocking)
+		void INotifyBlockingMove.OnNotifyBlockingMove(Actor self, Actor blocking)
 		{
 			// I'm blocking someone else from moving to my location:
-			var act = self.GetCurrentActivity();
+			var act = self.CurrentActivity;
 
 			// If I'm just waiting around then get out of the way:
 			if (act is Wait)
@@ -253,8 +267,7 @@ namespace OpenRA.Mods.Common.Traits
 			}
 		}
 
-		int idleDuration;
-		public void TickIdle(Actor self)
+		void INotifyIdle.TickIdle(Actor self)
 		{
 			// Should we be intelligent while idle?
 			if (!idleSmart) return;
@@ -303,6 +316,20 @@ namespace OpenRA.Mods.Common.Traits
 			return contents.Count == 0;
 		}
 
+		public bool CanHarvestCell(Actor self, CPos cell)
+		{
+			// Resources only exist in the ground layer
+			if (cell.Layer != 0)
+				return false;
+
+			var resType = resLayer.GetResource(cell);
+			if (resType == null)
+				return false;
+
+			// Can the harvester collect this kind of resource?
+			return Info.Resources.Contains(resType.Info.Type);
+		}
+
 		public IEnumerable<IOrderTargeter> Orders
 		{
 			get
@@ -349,20 +376,8 @@ namespace OpenRA.Mods.Common.Traits
 				CPos? loc;
 				if (order.TargetLocation != CPos.Zero)
 				{
-					loc = order.TargetLocation;
-
-					var territory = self.World.WorldActor.TraitOrDefault<ResourceClaimLayer>();
-					if (territory != null)
-					{
-						// Find the nearest claimable cell to the order location (useful for group-select harvest):
-						loc = mobile.NearestCell(loc.Value, p => mobile.CanEnterCell(p) && territory.ClaimResource(self, p), 1, 6);
-					}
-					else
-					{
-						// Find the nearest cell to the order location (useful for group-select harvest):
-						var taken = new HashSet<CPos>();
-						loc = mobile.NearestCell(loc.Value, p => mobile.CanEnterCell(p) && taken.Add(p), 1, 6);
-					}
+					// Find the nearest claimable cell to the order location (useful for group-select harvest):
+					loc = mobile.NearestCell(order.TargetLocation, p => mobile.CanEnterCell(p) && claimLayer.TryClaimCell(self, p), 1, 6);
 				}
 				else
 				{
@@ -417,15 +432,6 @@ namespace OpenRA.Mods.Common.Traits
 			}
 		}
 
-		public void OnNotifyResourceClaimLost(Actor self, ResourceClaim claim, Actor claimer)
-		{
-			if (self == claimer) return;
-
-			// Our claim on a resource was stolen, find more unclaimed resources:
-			self.CancelActivity();
-			self.QueueActivity(new FindResources(self));
-		}
-
 		PipType GetPipAt(int i)
 		{
 			var n = i * Info.Capacity / Info.PipCount;
@@ -447,9 +453,9 @@ namespace OpenRA.Mods.Common.Traits
 				yield return GetPipAt(i);
 		}
 
-		public bool ShouldExplode(Actor self) { return !IsEmpty; }
+		bool IExplodeModifier.ShouldExplode(Actor self) { return !IsEmpty; }
 
-		public int GetSpeedModifier()
+		int ISpeedModifier.GetSpeedModifier()
 		{
 			return 100 - (100 - Info.FullyLoadedSpeed) * contents.Values.Sum() / Info.Capacity;
 		}
@@ -478,7 +484,7 @@ namespace OpenRA.Mods.Common.Traits
 				var res = self.World.WorldActor.Trait<ResourceLayer>().GetRenderedResource(location);
 				var info = self.Info.TraitInfo<HarvesterInfo>();
 
-				if (res == null || !info.Resources.Contains(res.Info.Name))
+				if (res == null || !info.Resources.Contains(res.Info.Type))
 					return false;
 
 				cursor = "harvest";

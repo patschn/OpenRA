@@ -1,5 +1,7 @@
 World:
 	CrateSpawner:
+		Enabled: true
+		Locked: true
 		Maximum: 4
 		SpawnInterval: 125
 		CrateActors: unitcrate
@@ -30,8 +32,12 @@ UNITCRATE:
 	GiveUnitCrateAction@e1:
 		SelectionShares: 1
 		Units: e1
+	GiveUnitCrateAction@e3:
+		SelectionShares: 1
+		Units: e3
 
 APC:
+	Inherits@AUTOTARGET: ^AutoTargetAll
 	Health:
 		HP: 1000
 	MustBeDestroyed:
@@ -44,6 +50,8 @@ Player:
 		FogEnabled: False
 		ExploredMapLocked: True
 		ExploredMapEnabled: True
+		CrateLocked: True
+		CrateEnabled: True
 	PlayerResources:
 		DefaultCashLocked: True
 		DefaultCash: 5000

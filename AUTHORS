@@ -5,10 +5,8 @@ The OpenRA developers are:
     * Chris Forbes (chrisf)
     * Igor Popov (ihptru)
     * Lukas Franke (abcdefg30)
-    * Matthias Mailänder (Mailaender)
     * Oliver Brakmann (obrakmann)
     * Paul Chote (pchote)
-    * Pavel Penev (penev92)
     * Reaperrr
     * Tom Roostan (RoosterDragon)
 
@@ -17,8 +15,10 @@ Previous developers included:
     * Caleb Anderson (RobotCaleb)
     * Curtis Shmyr (hamb)
     * Daniel Hernandez (Mancano)
+    * Matthias Mailänder (Mailaender)
     * Megan Bowra-Dean (beedee)
     * Mike Bundy (kehaar)
+    * Pavel Penev (penev92)
     * Robert Pepperell (ytinasni)
     * ScottNZ
 
@@ -59,7 +59,7 @@ Also thanks to:
     * Florian Wiesbauer (FiveAces)
     * Frank Razenberg (zzattack)
     * Gareth Needham (Ripley`)
-    * Glen Anderson (GlenAnderson)
+    * Glen Anderson (GlenLife)
     * Glenn Martin Jensen (Baxxster)
     * Gordon Martin (Happy0)
     * Guido Lipke (LipkeGu)
@@ -89,6 +89,7 @@ Also thanks to:
     * Lesueur Benjamin (Valkirie)
     * Maarten Meuris (Nyerguds)
     * Mark Olson (markolson)
+    * Markus Hartung (hartmark)
     * Matija Hustic (matija-hustic)
     * Matthew Gatland (mgatland)
     * Matthew Uzzell (MUzzell)
@@ -127,6 +128,7 @@ Also thanks to:
     * Tirili
     * Tristan Keating (Kilkakon)
     * Tristan Mühlbacher (MicroBit)
+    * UnknownProgrammer
     * Vladimir Komarov (VrKomarov)
     * Wuschel
 
@@ -169,6 +171,8 @@ Krueger and distributed under the GNU GPL terms.
 Using SmartIrc4Net developed by Mirco Bauer
 distributed under the LGPL version 2.1 or later.
 
+Using rix0rrr.BeaconLib developed by Rico Huijbers
+distributed under MIT License.
 
 Finally, special thanks goes to the original teams
 at Westwood Studios and EA for creating the classic

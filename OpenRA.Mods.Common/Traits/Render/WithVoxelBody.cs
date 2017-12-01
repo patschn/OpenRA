@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -19,24 +19,27 @@ using OpenRA.Traits;
 namespace OpenRA.Mods.Common.Traits.Render
 {
 	[Desc("Also returns a default selection size that is calculated automatically from the voxel dimensions.")]
-	public class WithVoxelBodyInfo : UpgradableTraitInfo, IRenderActorPreviewVoxelsInfo, Requires<RenderVoxelsInfo>
+	public class WithVoxelBodyInfo : ConditionalTraitInfo, IRenderActorPreviewVoxelsInfo, Requires<RenderVoxelsInfo>, IAutoSelectionSizeInfo
 	{
 		public readonly string Sequence = "idle";
 
+		[Desc("Defines if the Voxel should have a shadow.")]
+		public readonly bool ShowShadow = true;
+
 		public override object Create(ActorInitializer init) { return new WithVoxelBody(init.Self, this); }
 
-		public IEnumerable<VoxelAnimation> RenderPreviewVoxels(
+		public IEnumerable<ModelAnimation> RenderPreviewVoxels(
 			ActorPreviewInitializer init, RenderVoxelsInfo rv, string image, Func<WRot> orientation, int facings, PaletteReference p)
 		{
 			var body = init.Actor.TraitInfo<BodyOrientationInfo>();
-			var voxel = VoxelProvider.GetVoxel(image, "idle");
-			yield return new VoxelAnimation(voxel, () => WVec.Zero,
+			var model = init.World.ModelCache.GetModelSequence(image, Sequence);
+			yield return new ModelAnimation(model, () => WVec.Zero,
 				() => new[] { body.QuantizeOrientation(orientation(), facings) },
-				() => false, () => 0);
+				() => false, () => 0, ShowShadow);
 		}
 	}
 
-	public class WithVoxelBody : UpgradableTrait<WithVoxelBodyInfo>, IAutoSelectionSize
+	public class WithVoxelBody : ConditionalTrait<WithVoxelBodyInfo>, IAutoSelectionSize
 	{
 		readonly int2 size;
 
@@ -46,14 +49,14 @@ namespace OpenRA.Mods.Common.Traits.Render
 			var body = self.Trait<BodyOrientation>();
 			var rv = self.Trait<RenderVoxels>();
 
-			var voxel = VoxelProvider.GetVoxel(rv.Image, info.Sequence);
-			rv.Add(new VoxelAnimation(voxel, () => WVec.Zero,
+			var model = self.World.ModelCache.GetModelSequence(rv.Image, info.Sequence);
+			rv.Add(new ModelAnimation(model, () => WVec.Zero,
 				() => new[] { body.QuantizeOrientation(self, self.Orientation) },
-				() => IsTraitDisabled, () => 0));
+				() => IsTraitDisabled, () => 0, info.ShowShadow));
 
 			// Selection size
 			var rvi = self.Info.TraitInfo<RenderVoxelsInfo>();
-			var s = (int)(rvi.Scale * voxel.Size.Aggregate(Math.Max));
+			var s = (int)(rvi.Scale * model.Size.Aggregate(Math.Max));
 			size = new int2(s, s);
 		}
 

@@ -1,20 +1,15 @@
 Metadata:
 	Title: Tiberian Sun
-	Description: Developer stub, not yet ready for release!
 	Version: {DEV_VERSION}
-	Author: the OpenRA Developers
 
-RequiresMods:
-	modchooser: {DEV_VERSION}
+PackageFormats: Mix
 
 Packages:
 	~^Content/ts
+	~^Content/ts/firestorm
 	.
 	$ts: ts
 	./mods/common: common
-	$ra: ra
-	$cnc: cnc
-	$d2k: d2k
 
 # Tiberian Sun
 	~scores.mix
@@ -66,6 +61,7 @@ Rules:
 	ts|rules/aircraft.yaml
 	ts|rules/husks.yaml
 	ts|rules/civilian-infantry.yaml
+	ts|rules/critters.yaml
 	ts|rules/civilian-structures.yaml
 	ts|rules/civilian-vehicles.yaml
 	ts|rules/gdi-infantry.yaml
@@ -84,11 +80,10 @@ Rules:
 	ts|rules/bridges.yaml
 
 Weapons:
-	ts|weapons/bombsandgrenades.yaml
+	ts|weapons/ballisticweapons.yaml
 	ts|weapons/energyweapons.yaml
 	ts|weapons/explosions.yaml
 	ts|weapons/healweapons.yaml
-	ts|weapons/largeguns.yaml
 	ts|weapons/missiles.yaml
 	ts|weapons/otherweapons.yaml
 	ts|weapons/smallguns.yaml
@@ -103,8 +98,9 @@ Sequences:
 	ts|sequences/vehicles.yaml
 	ts|sequences/trees.yaml
 	ts|sequences/bridges.yaml
+	ts|sequences/critters.yaml
 
-VoxelSequences:
+ModelSequences:
 	ts|sequences/voxels.yaml
 
 TileSets:
@@ -113,9 +109,10 @@ TileSets:
 
 MapGrid:
 	TileSize: 48,24
+	EnableDepthBuffer: True
 	Type: RectangularIsometric
 	MaximumTerrainHeight: 16
-	SubCellOffsets: 0,0,0, -256,128,0, 0,-128,0, 256,128,0
+	SubCellOffsets: 0,0,0, -362,181,0, 0,-128,0, 362,181,0
 	DefaultSubCell: 2
 
 Cursors:
@@ -126,51 +123,50 @@ Chrome:
 
 Assemblies:
 	common|OpenRA.Mods.Common.dll
-	ra|OpenRA.Mods.RA.dll
-	cnc|OpenRA.Mods.Cnc.dll
-	ts|OpenRA.Mods.TS.dll
+	common|OpenRA.Mods.Cnc.dll
 
 ChromeLayout:
-	ra|chrome/ingame.yaml
-	ra|chrome/ingame-chat.yaml
-	ra|chrome/ingame-fmvplayer.yaml
-	ra|chrome/ingame-menu.yaml
+	common|chrome/ingame.yaml
+	common|chrome/ingame-chat.yaml
+	common|chrome/ingame-fmvplayer.yaml
+	common|chrome/ingame-menu.yaml
 	ts|chrome/ingame-info.yaml
-	ra|chrome/ingame-infoscripterror.yaml
-	ra|chrome/ingame-infobriefing.yaml
-	ra|chrome/ingame-infoobjectives.yaml
-	ra|chrome/ingame-infostats.yaml
-	d2k|chrome/ingame-observer.yaml
+	common|chrome/ingame-infoscripterror.yaml
+	common|chrome/ingame-infobriefing.yaml
+	common|chrome/ingame-infoobjectives.yaml
+	common|chrome/ingame-infostats.yaml
+	ts|chrome/ingame-observer.yaml
 	ts|chrome/ingame-observerstats.yaml
 	ts|chrome/ingame-player.yaml
-	ra|chrome/ingame-perf.yaml
+	common|chrome/ingame-perf.yaml
 	ts|chrome/ingame-debug.yaml
-	ra|chrome/mainmenu.yaml
-	ra|chrome/settings.yaml
-	ra|chrome/credits.yaml
-	ra|chrome/lobby.yaml
-	ra|chrome/lobby-mappreview.yaml
-	ra|chrome/lobby-players.yaml
-	ra|chrome/lobby-options.yaml
-	ra|chrome/lobby-music.yaml
-	ra|chrome/lobby-kickdialogs.yaml
-	ra|chrome/lobby-globalchat.yaml
+	common|chrome/mainmenu.yaml
+	ts|chrome/mainmenu-prerelease-notification.yaml
+	common|chrome/settings.yaml
+	common|chrome/credits.yaml
+	common|chrome/lobby.yaml
+	common|chrome/lobby-mappreview.yaml
+	common|chrome/lobby-players.yaml
+	common|chrome/lobby-options.yaml
+	common|chrome/lobby-music.yaml
+	common|chrome/lobby-kickdialogs.yaml
+	common|chrome/lobby-globalchat.yaml
 	ts|chrome/color-picker.yaml
-	ra|chrome/map-chooser.yaml
-	ra|chrome/multiplayer.yaml
-	ra|chrome/multiplayer-browser.yaml
-	ra|chrome/multiplayer-createserver.yaml
-	ra|chrome/multiplayer-directconnect.yaml
-	ra|chrome/multiplayer-globalchat.yaml
-	ra|chrome/connection.yaml
-	ra|chrome/replaybrowser.yaml
+	common|chrome/map-chooser.yaml
+	common|chrome/multiplayer.yaml
+	common|chrome/multiplayer-browser.yaml
+	common|chrome/multiplayer-createserver.yaml
+	common|chrome/multiplayer-directconnect.yaml
+	common|chrome/multiplayer-globalchat.yaml
+	common|chrome/connection.yaml
+	common|chrome/replaybrowser.yaml
 	ts|chrome/dropdowns.yaml
-	ra|chrome/musicplayer.yaml
-	ra|chrome/tooltips.yaml
-	ra|chrome/assetbrowser.yaml
-	ra|chrome/missionbrowser.yaml
-	ra|chrome/confirmation-dialogs.yaml
-	ra|chrome/editor.yaml
+	common|chrome/musicplayer.yaml
+	common|chrome/tooltips.yaml
+	common|chrome/assetbrowser.yaml
+	common|chrome/missionbrowser.yaml
+	common|chrome/confirmation-dialogs.yaml
+	common|chrome/editor.yaml
 
 Voices:
 	ts|audio/voices.yaml
@@ -240,6 +236,8 @@ SpriteSequenceFormat: TilesetSpecificSpriteSequence
 		TEMPERATE: t
 		SNOW: a
 
+ModelSequenceFormat: VoxelModelSequence
+
 GameSpeeds:
 	slower:
 		Name: Slower
@@ -249,6 +247,10 @@ GameSpeeds:
 		Name: Normal
 		Timestep: 40
 		OrderLatency: 3
+	fast:
+		Name: Fast
+		Timestep: 35
+		OrderLatency: 4
 	faster:
 		Name: Faster
 		Timestep: 30
@@ -262,22 +264,32 @@ ColorValidator:
 
 ModContent:
 	InstallPromptMessage: Tiberian Sun requires artwork and audio from the original game.\n\nQuick Install will automatically download this content (without music\nor videos) from a mirror of the 2012 Tiberian Sun freeware release.\n\nAdvanced Install includes options for downloading the music and for\ncopying the videos and other content from an original game disc.
-	QuickDownload: basefiles
+	QuickDownload: quickinstall
 	HeaderMessage: Game content may be extracted from the original game discs or an\nexisting digital install. OpenRA can also download the base game\nfiles from an online mirror of the 2012 freeware release of TS.
 	Packages:
-		base: Base Game Files
+		tibsun: Base Game Files
 			TestFiles: ^Content/ts/cache.mix, ^Content/ts/conquer.mix, ^Content/ts/isosnow.mix, ^Content/ts/isotemp.mix, ^Content/ts/local.mix, ^Content/ts/sidec01.mix, ^Content/ts/sidec02.mix, ^Content/ts/sno.mix, ^Content/ts/snow.mix, ^Content/ts/sounds.mix, ^Content/ts/speech01.mix, ^Content/ts/tem.mix, ^Content/ts/temperat.mix
 			Sources: tibsun, tibsun-linux, tfd, origin
 			Required: true
 			Download: basefiles
-		music: Base Game Music
+		tibsun-music: Base Game Music
 			TestFiles: ^Content/ts/scores.mix
 			Sources: tibsun, tibsun-linux, tfd, origin
-			Download: music
+			Download: tibsun-music
+		fstorm: Expansion Freeware Content
+			TestFiles: ^Content/ts/firestorm/e01sc01.mix, ^Content/ts/firestorm/e01sc02.mix, ^Content/ts/firestorm/e01vox01.mix, ^Content/ts/firestorm/e01vox02.mix
+			Sources: tfd, origin, fstorm
+			Required: true
+			Download: fstorm
+		fstorm-music: Expansion Freeware Music
+			Sources: tfd, origin, fstorm
+			TestFiles: ^Content/ts/firestorm/linkup.aud, ^Content/ts/firestorm/hacker.aud
+			Download: fstorm-music
 	Downloads:
 		ts|installer/downloads.yaml
 	Sources:
 		ts|installer/downloads.yaml
+		ts|installer/firestorm.yaml
 		ts|installer/firstdecade.yaml
 		ts|installer/origin.yaml
 		ts|installer/tibsun.yaml

@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -374,9 +374,15 @@ namespace OpenRA.Mods.Common.Widgets
 			});
 		}
 
-		void BindingAdd(object item)
+		void BindingAdd(IObservableCollection col, object item)
 		{
-			Game.RunAfterTick(() => BindingAddImpl(item));
+			Game.RunAfterTick(() =>
+			{
+				if (collection != col)
+					return;
+
+				BindingAddImpl(item);
+			});
 		}
 
 		void BindingAddImpl(object item)
@@ -393,30 +399,40 @@ namespace OpenRA.Mods.Common.Widgets
 				ScrollToBottom();
 		}
 
-		void BindingRemove(object item)
+		void BindingRemove(IObservableCollection col, object item)
 		{
 			Game.RunAfterTick(() =>
 			{
+				if (collection != col)
+					return;
+
 				var widget = Children.FirstOrDefault(w => widgetItemEquals(w, item));
 				if (widget != null)
 					RemoveChild(widget);
 			});
 		}
 
-		void BindingRemoveAt(int index)
+		void BindingRemoveAt(IObservableCollection col, int index)
 		{
 			Game.RunAfterTick(() =>
 			{
+				if (collection != col)
+					return;
+
 				if (index < 0 || index >= Children.Count)
 					return;
+
 				RemoveChild(Children[index]);
 			});
 		}
 
-		void BindingSet(object oldItem, object newItem)
+		void BindingSet(IObservableCollection col, object oldItem, object newItem)
 		{
 			Game.RunAfterTick(() =>
 			{
+				if (collection != col)
+					return;
+
 				var newWidget = makeWidget(newItem);
 				newWidget.Parent = this;
 
@@ -433,10 +449,13 @@ namespace OpenRA.Mods.Common.Widgets
 			});
 		}
 
-		void BindingRefresh()
+		void BindingRefresh(IObservableCollection col)
 		{
 			Game.RunAfterTick(() =>
 			{
+				if (collection != col)
+					return;
+
 				RemoveChildren();
 				foreach (var item in collection.ObservedItems)
 					BindingAddImpl(item);

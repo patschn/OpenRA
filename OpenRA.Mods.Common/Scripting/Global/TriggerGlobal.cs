@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -419,14 +419,16 @@ namespace OpenRA.Mods.Common.Scripting
 		}
 
 		[Desc("Call a function when this actor is discovered by an enemy or a player with a Neutral stance. " +
-			"The callback function will be called as func(Actor discovered, Player discoverer).")]
+			"The callback function will be called as func(Actor discovered, Player discoverer). +" +
+			"The player actor needs the 'EnemyWatcher' trait.")]
 		public void OnDiscovered(Actor a, LuaFunction func)
 		{
 			GetScriptTriggers(a).RegisterCallback(Trigger.OnDiscovered, func, Context);
 		}
 
 		[Desc("Call a function when this player is discovered by an enemy or neutral player. " +
-			"The callback function will be called as func(Player discovered, Player discoverer, Actor discoveredActor).")]
+			"The callback function will be called as func(Player discovered, Player discoverer, Actor discoveredActor)." +
+			"The player actor needs the 'EnemyWatcher' trait.")]
 		public void OnPlayerDiscovered(Player discovered, LuaFunction func)
 		{
 			GetScriptTriggers(discovered.PlayerActor).RegisterCallback(Trigger.OnPlayerDiscovered, func, Context);

@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -82,10 +82,16 @@ namespace OpenRA.Mods.Common.Lint
 										{
 											foreach (var imageOverride in LintExts.GetFieldValues(traitInfo, imageField, emitError))
 											{
-												if (!string.IsNullOrEmpty(imageOverride) && sequenceDefinitions.All(s => s.Key != imageOverride.ToLowerInvariant()))
+												if (string.IsNullOrEmpty(imageOverride))
+												{
+													emitWarning("Custom sprite image of actor {0} is null.".F(actorInfo.Value.Name));
+													continue;
+												}
+
+												if (sequenceDefinitions.All(s => s.Key != imageOverride.ToLowerInvariant()))
 													emitError("Custom sprite image {0} from actor {1} has no sequence definition.".F(imageOverride, actorInfo.Value.Name));
 												else
-													CheckDefintions(imageOverride, sequenceReference, actorInfo, sequence, faction, field, traitInfo);
+													CheckDefinitions(imageOverride, sequenceReference, actorInfo, sequence, faction, field, traitInfo);
 											}
 										}
 									}
@@ -94,7 +100,7 @@ namespace OpenRA.Mods.Common.Lint
 										foreach (var sequenceProvider in sequenceProviders)
 										{
 											var image = renderInfo.GetImage(actorInfo.Value, sequenceProvider, faction);
-											CheckDefintions(image, sequenceReference, actorInfo, sequence, faction, field, traitInfo);
+											CheckDefinitions(image, sequenceReference, actorInfo, sequence, faction, field, traitInfo);
 										}
 									}
 								}
@@ -147,7 +153,7 @@ namespace OpenRA.Mods.Common.Lint
 			}
 		}
 
-		void CheckDefintions(string image, SequenceReferenceAttribute sequenceReference,
+		void CheckDefinitions(string image, SequenceReferenceAttribute sequenceReference,
 			KeyValuePair<string, ActorInfo> actorInfo, string sequence, string faction, FieldInfo field, ITraitInfo traitInfo)
 		{
 			var definitions = sequenceDefinitions.FirstOrDefault(n => n.Key == image.ToLowerInvariant());

@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -15,12 +15,14 @@ using System.ComponentModel;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.Serialization;
 using System.Text.RegularExpressions;
 using OpenRA.Graphics;
 using OpenRA.Primitives;
+using OpenRA.Support;
 
 namespace OpenRA
 {
@@ -347,7 +349,7 @@ namespace OpenRA
 					if (parts.Length == 3)
 					{
 						int rr, rp, ry;
-						if (Exts.TryParseIntegerInvariant(value, out rr) && Exts.TryParseIntegerInvariant(value, out rp) && Exts.TryParseIntegerInvariant(value, out ry))
+						if (Exts.TryParseIntegerInvariant(parts[0], out rr) && Exts.TryParseIntegerInvariant(parts[1], out rp) && Exts.TryParseIntegerInvariant(parts[2], out ry))
 							return new WRot(new WAngle(rr), new WAngle(rp), new WAngle(ry));
 					}
 				}
@@ -396,6 +398,38 @@ namespace OpenRA
 
 				return InvalidValueAction(value, fieldType, fieldName);
 			}
+			else if (fieldType == typeof(BooleanExpression))
+			{
+				if (value != null)
+				{
+					try
+					{
+						return new BooleanExpression(value);
+					}
+					catch (InvalidDataException e)
+					{
+						throw new YamlException(e.Message);
+					}
+				}
+
+				return InvalidValueAction(value, fieldType, fieldName);
+			}
+			else if (fieldType == typeof(IntegerExpression))
+			{
+				if (value != null)
+				{
+					try
+					{
+						return new IntegerExpression(value);
+					}
+					catch (InvalidDataException e)
+					{
+						throw new YamlException(e.Message);
+					}
+				}
+
+				return InvalidValueAction(value, fieldType, fieldName);
+			}
 			else if (fieldType.IsEnum)
 			{
 				try
@@ -437,7 +471,9 @@ namespace OpenRA
 				if (value == null)
 					return Array.CreateInstance(fieldType.GetElementType(), 0);
 
-				var parts = value.Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+				var options = field != null && field.HasAttribute<AllowEmptyEntriesAttribute>() ?
+					StringSplitOptions.None : StringSplitOptions.RemoveEmptyEntries;
+				var parts = value.Split(new char[] { ',' }, options);
 
 				var ret = Array.CreateInstance(fieldType.GetElementType(), parts.Length);
 				for (var i = 0; i < parts.Length; i++)
@@ -662,6 +698,13 @@ namespace OpenRA
 		}
 
 		[AttributeUsage(AttributeTargets.Field)]
+		public sealed class AllowEmptyEntriesAttribute : SerializeAttribute
+		{
+			public AllowEmptyEntriesAttribute()
+				: base(allowEmptyEntries: true) { }
+		}
+
+		[AttributeUsage(AttributeTargets.Field)]
 		public sealed class LoadUsingAttribute : SerializeAttribute
 		{
 			public LoadUsingAttribute(string loader, bool required = false)
@@ -684,11 +727,13 @@ namespace OpenRA
 			public bool FromYamlKey;
 			public bool DictionaryFromYamlKey;
 			public bool Required;
+			public bool AllowEmptyEntries;
 
-			public SerializeAttribute(bool serialize = true, bool required = false)
+			public SerializeAttribute(bool serialize = true, bool required = false, bool allowEmptyEntries = false)
 			{
 				Serialize = serialize;
 				Required = required;
+				AllowEmptyEntries = allowEmptyEntries;
 			}
 
 			internal Func<MiniYaml, object> GetLoader(Type type)

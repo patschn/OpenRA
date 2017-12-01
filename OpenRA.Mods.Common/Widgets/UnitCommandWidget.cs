@@ -1,6 +1,12 @@
+<<<<<<< HEAD
 ﻿#region Copyright & License Information
 /*
  * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+=======
+#region Copyright & License Information
+/*
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
+>>>>>>> upstream/master
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -69,8 +75,14 @@ namespace OpenRA.Mods.Common.Widgets
 				if (key == ks.DeployKey)
 					return PerformDeploy();
 
+<<<<<<< HEAD
 				if (key == ks.StanceCycleKey)
 					return PerformStanceCycle();
+=======
+				var stanceKeyIdx = new Hotkey[] { ks.StanceHoldFireKey, ks.StanceReturnFireKey, ks.StanceDefendKey, ks.StanceAttackAnythingKey }.IndexOf(key);
+				if (stanceKeyIdx > -1)
+					return SetUnitStance((UnitStance)stanceKeyIdx);
+>>>>>>> upstream/master
 
 				if (key == ks.GuardKey)
 					return PerformGuard();
@@ -125,6 +137,7 @@ namespace OpenRA.Mods.Common.Widgets
 			PerformKeyboardOrderOnSelection(a => new Order("DeployTransform", a, false));
 			PerformKeyboardOrderOnSelection(a => new Order("Unload", a, false));
 			PerformKeyboardOrderOnSelection(a => new Order("Detonate", a, false));
+<<<<<<< HEAD
 			PerformKeyboardOrderOnSelection(a => new Order("DeployToUpgrade", a, false));
 			return true;
 		}
@@ -149,16 +162,33 @@ namespace OpenRA.Mods.Common.Widgets
 				.Skip(1)
 				.First();
 
+=======
+			PerformKeyboardOrderOnSelection(a => new Order("GrantConditionOnDeploy", a, false));
+			return true;
+		}
+
+		bool SetUnitStance(UnitStance unitStance)
+		{
+>>>>>>> upstream/master
 			PerformKeyboardOrderOnSelection(a =>
 			{
 				var at = a.TraitOrDefault<AutoTarget>();
 				if (at != null)
+<<<<<<< HEAD
 					at.PredictedStance = nextStance;
 
 				return new Order("SetUnitStance", a, false) { ExtraData = (uint)nextStance };
 			});
 
 			Game.Debug("Unit stance set to: {0}".F(nextStance));
+=======
+					at.PredictedStance = unitStance;
+
+				return new Order("SetUnitStance", a, false) { ExtraData = (uint)unitStance };
+			});
+
+			Game.AddChatLine(Color.White, "Battlefield Control", "Unit stance set to: {0}".F(unitStance));
+>>>>>>> upstream/master
 
 			return true;
 		}

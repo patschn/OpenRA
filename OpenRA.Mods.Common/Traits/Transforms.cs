@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -10,10 +10,8 @@
 #endregion
 
 using System.Collections.Generic;
-using OpenRA.Activities;
 using OpenRA.Mods.Common.Activities;
 using OpenRA.Mods.Common.Orders;
-using OpenRA.Mods.Common.Traits.Render;
 using OpenRA.Traits;
 
 namespace OpenRA.Mods.Common.Traits
@@ -53,7 +51,7 @@ namespace OpenRA.Mods.Common.Traits
 		public virtual object Create(ActorInitializer init) { return new Transforms(init, this); }
 	}
 
-	public class Transforms : IIssueOrder, IResolveOrder, IOrderVoice
+	public class Transforms : IIssueOrder, IResolveOrder, IOrderVoice, IIssueDeployOrder
 	{
 		readonly Actor self;
 		readonly TransformsInfo info;
@@ -73,7 +71,7 @@ namespace OpenRA.Mods.Common.Traits
 			return (order.OrderString == "DeployTransform") ? info.Voice : null;
 		}
 
-		bool CanDeploy()
+		public bool CanDeploy()
 		{
 			var building = self.TraitOrDefault<Building>();
 			if (building != null && building.Locked)
@@ -96,6 +94,11 @@ namespace OpenRA.Mods.Common.Traits
 			return null;
 		}
 
+		Order IIssueDeployOrder.IssueDeployOrder(Actor self)
+		{
+			return new Order("DeployTransform", self, false);
+		}
+
 		public void DeployTransform(bool queued)
 		{
 			if (!queued && !CanDeploy())
@@ -103,7 +106,7 @@ namespace OpenRA.Mods.Common.Traits
 				// Only play the "Cannot deploy here" audio
 				// for non-queued orders
 				foreach (var s in info.NoTransformSounds)
-					Game.Sound.PlayToPlayer(self.Owner, s);
+					Game.Sound.PlayToPlayer(SoundType.World, self.Owner, s);
 
 				Game.Sound.PlayNotification(self.World.Map.Rules, self.Owner, "Speech", info.NoTransformNotification, self.Owner.Faction.InternalName);
 
@@ -113,37 +116,14 @@ namespace OpenRA.Mods.Common.Traits
 			if (!queued)
 				self.CancelActivity();
 
-			if (self.Info.HasTraitInfo<IFacingInfo>())
-				self.QueueActivity(new Turn(self, info.Facing));
-
-			if (self.Info.HasTraitInfo<AircraftInfo>())
-				self.QueueActivity(new HeliLand(self, true));
-
-			self.QueueActivity(new CallFunc(() =>
+			self.QueueActivity(new Transform(self, info.IntoActor)
 			{
-				// Prevent deployment in bogus locations
-				var building = self.TraitOrDefault<Building>();
-				if (!CanDeploy() || (building != null && !building.Lock()))
-					return;
-
-				foreach (var nt in self.TraitsImplementing<INotifyTransform>())
-					nt.BeforeTransform(self);
-
-				var transform = new Transform(self, info.IntoActor)
-				{
-					Offset = info.Offset,
-					Facing = info.Facing,
-					Sounds = info.TransformSounds,
-					Notification = info.TransformNotification,
-					Faction = faction
-				};
-
-				var makeAnimation = self.TraitOrDefault<WithMakeAnimation>();
-				if (makeAnimation != null)
-					makeAnimation.Reverse(self, transform);
-				else
-					self.QueueActivity(transform);
-			}));
+				Offset = info.Offset,
+				Facing = info.Facing,
+				Sounds = info.TransformSounds,
+				Notification = info.TransformNotification,
+				Faction = faction
+			});
 		}
 
 		public void ResolveOrder(Actor self, Order order)

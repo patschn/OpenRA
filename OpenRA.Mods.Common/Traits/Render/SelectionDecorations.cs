@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -41,7 +41,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 		public int[] SelectionBoxBounds { get { return VisualBounds; } }
 	}
 
-	public class SelectionDecorations : IRenderAboveShroud, ITick
+	public class SelectionDecorations : IRenderAboveShroud, INotifyCreated, ITick
 	{
 		// depends on the order of pips in TraitsInterfaces.cs!
 		static readonly string[] PipStrings = { "pip-empty", "pip-green", "pip-yellow", "pip-red", "pip-gray", "pip-blue", "pip-ammo", "pip-ammoempty" };
@@ -49,6 +49,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 		public readonly SelectionDecorationsInfo Info;
 
 		readonly Animation pipImages;
+		IPips[] pipSources;
 
 		public SelectionDecorations(Actor self, SelectionDecorationsInfo info)
 		{
@@ -57,12 +58,17 @@ namespace OpenRA.Mods.Common.Traits.Render
 			pipImages = new Animation(self.World, Info.Image);
 		}
 
+		void INotifyCreated.Created(Actor self)
+		{
+			pipSources = self.TraitsImplementing<IPips>().ToArray();
+		}
+
 		IEnumerable<WPos> ActivityTargetPath(Actor self)
 		{
 			if (!self.IsInWorld || self.IsDead)
 				yield break;
 
-			var activity = self.GetCurrentActivity();
+			var activity = self.CurrentActivity;
 			if (activity != null)
 			{
 				var targets = activity.GetTargets(self);
@@ -76,8 +82,13 @@ namespace OpenRA.Mods.Common.Traits.Render
 		IEnumerable<IRenderable> IRenderAboveShroud.RenderAboveShroud(Actor self, WorldRenderer wr)
 		{
 			if (self.World.FogObscures(self))
-				yield break;
+				return Enumerable.Empty<IRenderable>();
 
+			return DrawDecorations(self, wr);
+		}
+
+		IEnumerable<IRenderable> DrawDecorations(Actor self, WorldRenderer wr)
+		{
 			var selected = self.World.Selection.Contains(self);
 			var regularWorld = self.World.Type == WorldType.Regular;
 			var statusBars = Game.Settings.Game.StatusBars;
@@ -108,21 +119,25 @@ namespace OpenRA.Mods.Common.Traits.Render
 			if (self.World.LocalPlayer != null && self.World.LocalPlayer.PlayerActor.Trait<DeveloperMode>().PathDebug)
 				yield return new TargetLineRenderable(ActivityTargetPath(self), Color.Green);
 
+			foreach (var r in DrawPips(self, wr))
+				yield return r;
+		}
+
+		IEnumerable<IRenderable> DrawPips(Actor self, WorldRenderer wr)
+		{
+			if (pipSources.Length == 0)
+				return Enumerable.Empty<IRenderable>();
+
 			var b = self.VisualBounds;
 			var pos = wr.ScreenPxPosition(self.CenterPosition);
 			var bl = wr.Viewport.WorldToViewPx(pos + new int2(b.Left, b.Bottom));
 			var pal = wr.Palette(Info.Palette);
 
-			foreach (var r in DrawPips(self, wr, bl, pal))
-				yield return r;
+			return DrawPips(self, bl, pal);
 		}
 
-		IEnumerable<IRenderable> DrawPips(Actor self, WorldRenderer wr, int2 basePosition, PaletteReference palette)
+		IEnumerable<IRenderable> DrawPips(Actor self, int2 basePosition, PaletteReference palette)
 		{
-			var pipSources = self.TraitsImplementing<IPips>();
-			if (!pipSources.Any())
-				yield break;
-
 			pipImages.PlayRepeating(PipStrings[0]);
 
 			var pipSize = pipImages.Image.Size.XY.ToInt2();

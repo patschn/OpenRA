@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -13,15 +13,18 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using OpenRA.Graphics;
+using OpenRA.Mods.Common.Traits;
 using OpenRA.Traits;
 using OpenRA.Widgets;
 
 namespace OpenRA.Mods.Common.Widgets
 {
-	public enum WorldTooltipType { None, Unexplored, Actor, FrozenActor }
+	public enum WorldTooltipType { None, Unexplored, Actor, FrozenActor, Resource }
 
 	public class ViewportControllerWidget : Widget
 	{
+		readonly ResourceLayer resourceLayer;
+
 		public readonly string TooltipTemplate = "WORLD_TOOLTIP";
 		public readonly string TooltipContainer;
 		Lazy<TooltipContainerWidget> tooltipContainer;
@@ -30,9 +33,7 @@ namespace OpenRA.Mods.Common.Widgets
 		public ITooltip ActorTooltip { get; private set; }
 		public IProvideTooltipInfo[] ActorTooltipExtra { get; private set; }
 		public FrozenActor FrozenActorTooltip { get; private set; }
-
-		public int EdgeScrollThreshold = 15;
-		public int EdgeCornerScrollThreshold = 35;
+		public ResourceType ResourceTooltip { get; private set; }
 
 		int2? joystickScrollStart, joystickScrollEnd;
 		int2? standardScrollStart;
@@ -105,6 +106,8 @@ namespace OpenRA.Mods.Common.Widgets
 			this.worldRenderer = worldRenderer;
 			tooltipContainer = Exts.Lazy(() =>
 				Ui.Root.Get<TooltipContainerWidget>(TooltipContainer));
+
+			resourceLayer = world.WorldActor.TraitOrDefault<ResourceLayer>();
 		}
 
 		public override void MouseEntered()
@@ -135,7 +138,7 @@ namespace OpenRA.Mods.Common.Widgets
 				var scroll = (joystickScrollEnd.Value - joystickScrollStart.Value).ToFloat2() * rate;
 				worldRenderer.Viewport.Scroll(scroll, false);
 			}
-			else
+			else if (!isStandardScrolling)
 			{
 				edgeDirections = ScrollDirection.None;
 				if (Game.Settings.Game.ViewportEdgeScroll && Game.HasInputFocus)
@@ -185,9 +188,13 @@ namespace OpenRA.Mods.Common.Widgets
 
 			if (underCursor != null)
 			{
-				ActorTooltip = underCursor.TraitsImplementing<ITooltip>().First();
-				ActorTooltipExtra = underCursor.TraitsImplementing<IProvideTooltipInfo>().ToArray();
-				TooltipType = WorldTooltipType.Actor;
+				ActorTooltip = underCursor.TraitsImplementing<ITooltip>().FirstOrDefault(Exts.IsTraitEnabled);
+				if (ActorTooltip != null)
+				{
+					ActorTooltipExtra = underCursor.TraitsImplementing<IProvideTooltipInfo>().ToArray();
+					TooltipType = WorldTooltipType.Actor;
+				}
+
 				return;
 			}
 
@@ -198,13 +205,24 @@ namespace OpenRA.Mods.Common.Widgets
 			if (frozen != null)
 			{
 				var actor = frozen.Actor;
-				if (actor != null && actor.TraitsImplementing<IVisibilityModifier>().Any(t => !t.IsVisible(actor, world.RenderPlayer)))
+				if (actor != null && actor.TraitsImplementing<IVisibilityModifier>().All(t => t.IsVisible(actor, world.RenderPlayer)))
+				{
+					FrozenActorTooltip = frozen;
+					if (frozen.Actor != null)
+						ActorTooltipExtra = frozen.Actor.TraitsImplementing<IProvideTooltipInfo>().ToArray();
+					TooltipType = WorldTooltipType.FrozenActor;
 					return;
+				}
+			}
 
-				FrozenActorTooltip = frozen;
-				if (frozen.Actor != null)
-					ActorTooltipExtra = frozen.Actor.TraitsImplementing<IProvideTooltipInfo>().ToArray();
-				TooltipType = WorldTooltipType.FrozenActor;
+			if (resourceLayer != null)
+			{
+				var resource = resourceLayer.GetRenderedResource(cell);
+				if (resource != null)
+				{
+					TooltipType = WorldTooltipType.Resource;
+					ResourceTooltip = resource;
+				}
 			}
 		}
 
@@ -277,18 +295,23 @@ namespace OpenRA.Mods.Common.Widgets
 
 			var scrollType = MouseScrollType.Disabled;
 
-			if (mi.Button == MouseButton.Middle || mi.Button == (MouseButton.Left | MouseButton.Right))
+			if (mi.Button.HasFlag(MouseButton.Middle) || mi.Button.HasFlag(MouseButton.Left | MouseButton.Right))
 				scrollType = Game.Settings.Game.MiddleMouseScroll;
-			else if (mi.Button == MouseButton.Right)
+			else if (mi.Button.HasFlag(MouseButton.Right))
 				scrollType = Game.Settings.Game.RightMouseScroll;
 
 			if (scrollType == MouseScrollType.Disabled)
-				return false;
+				return IsJoystickScrolling || isStandardScrolling;
 
 			if (scrollType == MouseScrollType.Standard || scrollType == MouseScrollType.Inverted)
 			{
 				if (mi.Event == MouseInputEvent.Down && !isStandardScrolling)
+				{
+					if (!TakeMouseFocus(mi))
+						return false;
+
 					standardScrollStart = mi.Location;
+				}
 				else if (mi.Event == MouseInputEvent.Move && (isStandardScrolling ||
 					(standardScrollStart.HasValue && ((standardScrollStart.Value - mi.Location).Length > Game.Settings.Game.MouseScrollDeadzone))))
 				{
@@ -302,6 +325,7 @@ namespace OpenRA.Mods.Common.Widgets
 					var wasStandardScrolling = isStandardScrolling;
 					isStandardScrolling = false;
 					standardScrollStart = null;
+					YieldMouseFocus(mi);
 
 					if (wasStandardScrolling)
 						return true;
@@ -315,6 +339,7 @@ namespace OpenRA.Mods.Common.Widgets
 				{
 					if (!TakeMouseFocus(mi))
 						return false;
+
 					joystickScrollStart = mi.Location;
 				}
 
@@ -329,11 +354,22 @@ namespace OpenRA.Mods.Common.Widgets
 						return true;
 				}
 
-				if (mi.Event == MouseInputEvent.Move && joystickScrollStart.HasValue)
+				if (mi.Event == MouseInputEvent.Move)
+				{
+					if (!joystickScrollStart.HasValue)
+						joystickScrollStart = mi.Location;
+
 					joystickScrollEnd = mi.Location;
+				}
 			}
 
-			return false;
+			return IsJoystickScrolling || isStandardScrolling;
+		}
+
+		public override bool YieldMouseFocus(MouseInput mi)
+		{
+			joystickScrollStart = joystickScrollEnd = null;
+			return base.YieldMouseFocus(mi);
 		}
 
 		public override bool YieldKeyboardFocus()
@@ -347,99 +383,95 @@ namespace OpenRA.Mods.Common.Widgets
 			var key = Hotkey.FromKeyInput(e);
 			var ks = Game.Settings.Keys;
 
-			if (key == ks.MapScrollUp)
+			Func<Hotkey, ScrollDirection, bool> handleMapScrollKey = (hotkey, scrollDirection) =>
 			{
-				keyboardDirections = keyboardDirections.Set(ScrollDirection.Up, e.Event == KeyInputEvent.Down);
-				return true;
-			}
+				var isHotkey = false;
+				if (key.Key == hotkey.Key)
+				{
+					isHotkey = key == hotkey;
+					keyboardDirections = keyboardDirections.Set(scrollDirection, e.Event == KeyInputEvent.Down && (isHotkey || hotkey.Modifiers == Modifiers.None));
+				}
 
-			if (key == ks.MapScrollDown)
-			{
-				keyboardDirections = keyboardDirections.Set(ScrollDirection.Down, e.Event == KeyInputEvent.Down);
-				return true;
-			}
+				return isHotkey;
+			};
 
-			if (key == ks.MapScrollLeft)
-			{
-				keyboardDirections = keyboardDirections.Set(ScrollDirection.Left, e.Event == KeyInputEvent.Down);
+			if (handleMapScrollKey(ks.MapScrollUp, ScrollDirection.Up) || handleMapScrollKey(ks.MapScrollDown, ScrollDirection.Down)
+				|| handleMapScrollKey(ks.MapScrollLeft, ScrollDirection.Left) || handleMapScrollKey(ks.MapScrollRight, ScrollDirection.Right))
 				return true;
-			}
 
-			if (key == ks.MapScrollRight)
-			{
-				keyboardDirections = keyboardDirections.Set(ScrollDirection.Right, e.Event == KeyInputEvent.Down);
-				return true;
-			}
+			if (e.Event != KeyInputEvent.Down)
+				return false;
 
 			if (key == ks.MapPushTop)
 			{
 				worldRenderer.Viewport.Center(new WPos(worldRenderer.Viewport.CenterPosition.X, 0, 0));
-				return false;
+				return true;
 			}
 
 			if (key == ks.MapPushBottom)
 			{
 				worldRenderer.Viewport.Center(new WPos(worldRenderer.Viewport.CenterPosition.X, worldRenderer.World.Map.ProjectedBottomRight.Y, 0));
-				return false;
+				return true;
 			}
 
 			if (key == ks.MapPushLeftEdge)
 			{
 				worldRenderer.Viewport.Center(new WPos(0, worldRenderer.Viewport.CenterPosition.Y, 0));
-				return false;
+				return true;
 			}
 
 			if (key == ks.MapPushRightEdge)
 			{
 				worldRenderer.Viewport.Center(new WPos(worldRenderer.World.Map.ProjectedBottomRight.X, worldRenderer.Viewport.CenterPosition.Y, 0));
+				return true;
 			}
 
 			if (key == ks.ViewPortBookmarkSaveSlot1)
 			{
 				SaveCurrentPositionToBookmark(0);
-				return false;
+				return true;
 			}
 
 			if (key == ks.ViewPortBookmarkSaveSlot2)
 			{
 				SaveCurrentPositionToBookmark(1);
-				return false;
+				return true;
 			}
 
 			if (key == ks.ViewPortBookmarkSaveSlot3)
 			{
 				SaveCurrentPositionToBookmark(2);
-				return false;
+				return true;
 			}
 
 			if (key == ks.ViewPortBookmarkSaveSlot4)
 			{
 				SaveCurrentPositionToBookmark(3);
-				return false;
+				return true;
 			}
 
 			if (key == ks.ViewPortBookmarkUseSlot1)
 			{
 				JumpToSavedBookmark(0);
-				return false;
+				return true;
 			}
 
 			if (key == ks.ViewPortBookmarkUseSlot2)
 			{
 				JumpToSavedBookmark(1);
-				return false;
+				return true;
 			}
 
 			if (key == ks.ViewPortBookmarkUseSlot3)
 			{
 				JumpToSavedBookmark(2);
-				return false;
+				return true;
 			}
 
 			if (key == ks.ViewPortBookmarkUseSlot4)
 			{
 				JumpToSavedBookmark(3);
-				return false;
+				return true;
 			}
 
 			return false;
@@ -447,14 +479,15 @@ namespace OpenRA.Mods.Common.Widgets
 
 		ScrollDirection CheckForDirections()
 		{
+			var margin = Game.Settings.Game.ViewportEdgeScrollMargin;
 			var directions = ScrollDirection.None;
-			if (Viewport.LastMousePos.X < EdgeScrollThreshold)
+			if (Viewport.LastMousePos.X < margin)
 				directions |= ScrollDirection.Left;
-			if (Viewport.LastMousePos.Y < EdgeScrollThreshold)
+			if (Viewport.LastMousePos.Y < margin)
 				directions |= ScrollDirection.Up;
-			if (Viewport.LastMousePos.X >= Game.Renderer.Resolution.Width - EdgeScrollThreshold)
+			if (Viewport.LastMousePos.X >= Game.Renderer.Resolution.Width - margin)
 				directions |= ScrollDirection.Right;
-			if (Viewport.LastMousePos.Y >= Game.Renderer.Resolution.Height - EdgeScrollThreshold)
+			if (Viewport.LastMousePos.Y >= Game.Renderer.Resolution.Height - margin)
 				directions |= ScrollDirection.Down;
 
 			return directions;

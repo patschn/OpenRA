@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -21,8 +21,8 @@ using OpenRA.Traits;
 
 namespace OpenRA.Mods.Common.Traits
 {
-	public class AircraftInfo : ITraitInfo, IPositionableInfo, IFacingInfo, IOccupySpaceInfo, IMoveInfo, ICruiseAltitudeInfo,
-		UsesInit<LocationInit>, UsesInit<FacingInit>
+	public class AircraftInfo : ITraitInfo, IPositionableInfo, IFacingInfo, IMoveInfo, ICruiseAltitudeInfo,
+		UsesInit<LocationInit>, UsesInit<FacingInit>, IActorPreviewInitInfo
 	{
 		public readonly WDist CruiseAltitude = new WDist(1280);
 		public readonly WDist IdealSeparation = new WDist(1706);
@@ -52,13 +52,13 @@ namespace OpenRA.Mods.Common.Traits
 
 		[VoiceReference] public readonly string Voice = "Action";
 
-		[UpgradeGrantedReference]
-		[Desc("The upgrades to grant to self while airborne.")]
-		public readonly string[] AirborneUpgrades = { };
+		[GrantedConditionReference]
+		[Desc("The condition to grant to self while airborne.")]
+		public readonly string AirborneCondition = null;
 
-		[UpgradeGrantedReference]
-		[Desc("The upgrades to grant to self while at cruise altitude.")]
-		public readonly string[] CruisingUpgrades = { };
+		[GrantedConditionReference]
+		[Desc("The condition to grant to self while at cruise altitude.")]
+		public readonly string CruisingCondition = null;
 
 		[Desc("Can the actor hover in place mid-air? If not, then the actor will have to remain in motion (circle around).")]
 		public readonly bool CanHover = false;
@@ -92,12 +92,39 @@ namespace OpenRA.Mods.Common.Traits
 		[Desc("The number of ticks that a airplane will wait to make a new search for an available airport.")]
 		public readonly int NumberOfTicksToVerifyAvailableAirport = 150;
 
+		[Desc("Facing to use for actor previews (map editor, color picker, etc)")]
+		public readonly int PreviewFacing = 92;
+
+		IEnumerable<object> IActorPreviewInitInfo.ActorPreviewInits(ActorInfo ai, ActorPreviewType type)
+		{
+			yield return new FacingInit(PreviewFacing);
+		}
+
 		public IReadOnlyDictionary<CPos, SubCell> OccupiedCells(ActorInfo info, CPos location, SubCell subCell = SubCell.Any) { return new ReadOnlyDictionary<CPos, SubCell>(); }
 		bool IOccupySpaceInfo.SharesCell { get { return false; } }
+
+		// Used to determine if an aircraft can spawn landed
+		public bool CanEnterCell(World world, Actor self, CPos cell, Actor ignoreActor = null, bool checkTransientActors = true)
+		{
+			if (!world.Map.Contains(cell))
+				return false;
+
+			var type = world.Map.GetTerrainInfo(cell).Type;
+			if (!LandableTerrainTypes.Contains(type))
+				return false;
+
+			if (world.WorldActor.Trait<BuildingInfluence>().GetBuildingAt(cell) != null)
+				return false;
+
+			if (!checkTransientActors)
+				return true;
+
+			return !world.ActorMap.GetActorsAt(cell).Any(x => x != ignoreActor);
+		}
 	}
 
 	public class Aircraft : ITick, ISync, IFacing, IPositionable, IMove, IIssueOrder, IResolveOrder, IOrderVoice, IDeathActorInitModifier,
-		INotifyCreated, INotifyAddedToWorld, INotifyRemovedFromWorld, INotifyActorDisposing, IActorPreviewInitModifier
+		INotifyCreated, INotifyAddedToWorld, INotifyRemovedFromWorld, INotifyActorDisposing, IActorPreviewInitModifier, IIssueDeployOrder
 	{
 		static readonly Pair<CPos, SubCell>[] NoCells = { };
 
@@ -105,7 +132,7 @@ namespace OpenRA.Mods.Common.Traits
 		public readonly AircraftInfo Info;
 		readonly Actor self;
 
-		UpgradeManager um;
+		ConditionManager conditionManager;
 		IDisposable reservation;
 		IEnumerable<int> speedModifiers;
 
@@ -118,6 +145,13 @@ namespace OpenRA.Mods.Common.Traits
 
 		bool airborne;
 		bool cruising;
+		bool firstTick = true;
+		int airborneToken = ConditionManager.InvalidConditionToken;
+		int cruisingToken = ConditionManager.InvalidConditionToken;
+
+		bool isMoving;
+		bool isMovingVertically;
+		WPos cachedPosition;
 
 		public Aircraft(ActorInitializer init, AircraftInfo info)
 		{
@@ -139,8 +173,9 @@ namespace OpenRA.Mods.Common.Traits
 
 		public void Created(Actor self)
 		{
-			um = self.TraitOrDefault<UpgradeManager>();
+			conditionManager = self.TraitOrDefault<ConditionManager>();
 			speedModifiers = self.TraitsImplementing<ISpeedModifier>().ToArray().Select(sm => sm.GetSpeedModifier());
+			cachedPosition = self.CenterPosition;
 		}
 
 		public void AddedToWorld(Actor self)
@@ -154,7 +189,6 @@ namespace OpenRA.Mods.Common.Traits
 				OnCruisingAltitudeReached();
 		}
 
-		bool firstTick = true;
 		public virtual void Tick(Actor self)
 		{
 			if (firstTick)
@@ -173,6 +207,11 @@ namespace OpenRA.Mods.Common.Traits
 
 				self.QueueActivity(new TakeOff(self));
 			}
+
+			var oldCachedPosition = cachedPosition;
+			cachedPosition = self.CenterPosition;
+			isMoving = (oldCachedPosition - cachedPosition).HorizontalLengthSquared != 0;
+			isMovingVertically = (oldCachedPosition - cachedPosition).VerticalLengthSquared != 0;
 
 			Repulse();
 		}
@@ -216,6 +255,15 @@ namespace OpenRA.Mods.Common.Traits
 					continue;
 
 				repulsionForce += GetRepulsionForce(actor);
+			}
+
+			// Actors outside the map bounds receive an extra nudge towards the center of the map
+			if (!self.World.Map.Contains(self.Location))
+			{
+				// The map bounds are in projected coordinates, which is technically wrong for this,
+				// but we avoid the issues in practice by guessing the middle of the map instead of the edge
+				var center = WPos.Lerp(self.World.Map.ProjectedTopLeft, self.World.Map.ProjectedBottomRight, 1, 2);
+				repulsionForce += new WVec(1024, 0, 0).Rotate(WRot.FromYaw((self.CenterPosition - center).Yaw));
 			}
 
 			if (Info.CanHover)
@@ -266,12 +314,12 @@ namespace OpenRA.Mods.Common.Traits
 
 		protected void ReserveSpawnBuilding()
 		{
-			/* HACK: not spawning in the air, so try to assoc. with our afld. */
-			var afld = GetActorBelow();
-			if (afld == null)
+			// HACK: Not spawning in the air, so try to associate with our spawner.
+			var spawner = GetActorBelow();
+			if (spawner == null)
 				return;
 
-			MakeReservation(afld);
+			MakeReservation(spawner);
 		}
 
 		public void MakeReservation(Actor target)
@@ -351,8 +399,14 @@ namespace OpenRA.Mods.Common.Traits
 			var name = a.Info.Name;
 			if (Info.RearmBuildings.Contains(name))
 				yield return new Rearm(self);
+
+			// The ResupplyAircraft activity guarantees that we're on the helipad
 			if (Info.RepairBuildings.Contains(name))
+<<<<<<< HEAD
 				yield return new Repair(self, a);
+=======
+				yield return new Repair(self, a, WDist.Zero);
+>>>>>>> upstream/master
 		}
 
 		public void ModifyDeathActorInit(Actor self, TypeDictionary init)
@@ -413,7 +467,7 @@ namespace OpenRA.Mods.Common.Traits
 			return new HeliFly(self, Target.FromCell(self.World, cell));
 		}
 
-		public Activity MoveTo(CPos cell, Actor ignoredActor)
+		public Activity MoveTo(CPos cell, Actor ignoreActor)
 		{
 			if (IsPlane)
 				return new FlyAndContinueWithCirclesWhenIdle(self, Target.FromCell(self.World, cell));
@@ -483,7 +537,9 @@ namespace OpenRA.Mods.Common.Traits
 
 		public CPos NearestMoveableCell(CPos cell) { return cell; }
 
-		public bool IsMoving { get { return self.World.Map.DistanceAboveTerrain(CenterPosition).Length > 0; } set { } }
+		public bool IsMoving { get { return isMoving; } set { } }
+
+		public bool IsMovingVertically { get { return isMovingVertically; } set { } }
 
 		public bool CanEnterTargetNow(Actor self, Target target)
 		{
@@ -518,6 +574,11 @@ namespace OpenRA.Mods.Common.Traits
 				return new Order(order.OrderID, self, queued) { TargetLocation = self.World.Map.CellContaining(target.CenterPosition) };
 
 			return null;
+		}
+
+		Order IIssueDeployOrder.IssueDeployOrder(Actor self)
+		{
+			return new Order("ReturnToBase", self, false);
 		}
 
 		public string VoicePhraseForOrder(Actor self, Order order)
@@ -623,7 +684,11 @@ namespace OpenRA.Mods.Common.Traits
 				if (IsPlane)
 					self.QueueActivity(new ReturnToBase(self, Info.AbortOnResupply, null, false));
 				else
+<<<<<<< HEAD
 					self.QueueActivity(new HeliReturnToBase(self, Info.AbortOnResupply, false));
+=======
+					self.QueueActivity(new HeliReturnToBase(self, Info.AbortOnResupply, null, false));
+>>>>>>> upstream/master
 			}
 		}
 
@@ -638,40 +703,40 @@ namespace OpenRA.Mods.Common.Traits
 			OnAirborneAltitudeLeft();
 		}
 
-		#region Airborne upgrades
+		#region Airborne conditions
 
 		void OnAirborneAltitudeReached()
 		{
 			if (airborne)
 				return;
+
 			airborne = true;
-			if (um != null)
-				foreach (var u in Info.AirborneUpgrades)
-					um.GrantUpgrade(self, u, this);
+			if (conditionManager != null && !string.IsNullOrEmpty(Info.AirborneCondition) && airborneToken == ConditionManager.InvalidConditionToken)
+				airborneToken = conditionManager.GrantCondition(self, Info.AirborneCondition);
 		}
 
 		void OnAirborneAltitudeLeft()
 		{
 			if (!airborne)
 				return;
+
 			airborne = false;
-			if (um != null)
-				foreach (var u in Info.AirborneUpgrades)
-					um.RevokeUpgrade(self, u, this);
+			if (conditionManager != null && airborneToken != ConditionManager.InvalidConditionToken)
+				airborneToken = conditionManager.RevokeCondition(self, airborneToken);
 		}
 
 		#endregion
 
-		#region Cruising upgrades
+		#region Cruising conditions
 
 		void OnCruisingAltitudeReached()
 		{
 			if (cruising)
 				return;
+
 			cruising = true;
-			if (um != null)
-				foreach (var u in Info.CruisingUpgrades)
-					um.GrantUpgrade(self, u, this);
+			if (conditionManager != null && !string.IsNullOrEmpty(Info.CruisingCondition) && cruisingToken == ConditionManager.InvalidConditionToken)
+				cruisingToken = conditionManager.GrantCondition(self, Info.CruisingCondition);
 		}
 
 		void OnCruisingAltitudeLeft()
@@ -679,9 +744,8 @@ namespace OpenRA.Mods.Common.Traits
 			if (!cruising)
 				return;
 			cruising = false;
-			if (um != null)
-				foreach (var u in Info.CruisingUpgrades)
-					um.RevokeUpgrade(self, u, this);
+			if (conditionManager != null && cruisingToken != ConditionManager.InvalidConditionToken)
+				cruisingToken = conditionManager.RevokeCondition(self, cruisingToken);
 		}
 
 		#endregion

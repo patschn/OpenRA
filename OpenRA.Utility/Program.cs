@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -45,21 +45,26 @@ namespace OpenRA
 
 			Game.InitializeSettings(Arguments.Empty);
 
+			var envModSearchPaths = Environment.GetEnvironmentVariable("MOD_SEARCH_PATHS");
+			var modSearchPaths = !string.IsNullOrWhiteSpace(envModSearchPaths) ?
+				FieldLoader.GetValue<string[]>("MOD_SEARCH_PATHS", envModSearchPaths) :
+				new[] { Path.Combine(".", "mods") };
+
 			if (args.Length == 0)
 			{
-				PrintUsage(new InstalledMods(null), null);
+				PrintUsage(new InstalledMods(modSearchPaths, new string[0]), null);
 				return;
 			}
 
 			var modId = args[0];
-			string customModPath = null;
+			var explicitModPaths = new string[0];
 			if (File.Exists(modId) || Directory.Exists(modId))
 			{
-				customModPath = modId;
+				explicitModPaths = new[] { modId };
 				modId = Path.GetFileNameWithoutExtension(modId);
 			}
 
-			var mods = new InstalledMods(customModPath);
+			var mods = new InstalledMods(modSearchPaths, explicitModPaths);
 			if (!mods.Keys.Contains(modId))
 			{
 				PrintUsage(mods, null);

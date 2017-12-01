@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -14,6 +14,7 @@ using System.Drawing;
 using System.Linq;
 using OpenRA.Activities;
 using OpenRA.GameRules;
+using OpenRA.Mods.Common.Effects;
 using OpenRA.Mods.Common.Traits;
 using OpenRA.Mods.D2k.Traits;
 using OpenRA.Traits;
@@ -28,25 +29,28 @@ namespace OpenRA.Mods.D2k.Activities
 
 		readonly Target target;
 		readonly Sandworm sandworm;
-		readonly UpgradeManager manager;
+		readonly ConditionManager conditionManager;
 		readonly WeaponInfo weapon;
-		readonly RadarPings radarPings;
+		readonly Armament armament;
 		readonly AttackSwallow swallow;
 		readonly IPositionable positionable;
+		readonly IFacing facing;
 
 		int countdown;
 		CPos burrowLocation;
 		AttackState stance;
+		int attackingToken = ConditionManager.InvalidConditionToken;
 
-		public SwallowActor(Actor self, Target target, WeaponInfo weapon)
+		public SwallowActor(Actor self, Target target, Armament a, IFacing facing)
 		{
 			this.target = target;
-			this.weapon = weapon;
+			this.facing = facing;
+			armament = a;
+			weapon = a.Weapon;
 			sandworm = self.Trait<Sandworm>();
 			positionable = self.Trait<Mobile>();
 			swallow = self.Trait<AttackSwallow>();
-			manager = self.Trait<UpgradeManager>();
-			radarPings = self.World.WorldActor.TraitOrDefault<RadarPings>();
+			conditionManager = self.TraitOrDefault<ConditionManager>();
 		}
 
 		bool AttackTargets(Actor self, IEnumerable<Actor> targets)
@@ -75,27 +79,18 @@ namespace OpenRA.Mods.D2k.Activities
 
 			var attackPosition = self.CenterPosition;
 			var affectedPlayers = targets.Select(x => x.Owner).Distinct().ToList();
-			Game.Sound.Play(swallow.Info.WormAttackSound, self.CenterPosition);
+			Game.Sound.Play(SoundType.World, swallow.Info.WormAttackSound, self.CenterPosition);
 
-			Game.RunAfterDelay(1000, () =>
-			{
-				if (!Game.IsCurrentWorld(self.World))
-					return;
+			foreach (var player in affectedPlayers)
+				self.World.AddFrameEndTask(w => w.Add(new MapNotificationEffect(player, "Speech", swallow.Info.WormAttackNotification, 25, true, attackPosition, Color.Red)));
 
-				foreach (var player in affectedPlayers)
-				{
-					Game.Sound.PlayNotification(player.World.Map.Rules, player, "Speech", swallow.Info.WormAttackNotification, player.Faction.InternalName);
+			var barrel = armament.CheckFire(self, facing, target);
+			if (barrel == null)
+				return false;
 
-					if (player == player.World.RenderPlayer)
-						radarPings.Add(() => true, attackPosition, Color.Red, 50);
-				}
-			});
-
+			// armament.CheckFire already calls INotifyAttack.PreparingAttack
 			foreach (var notify in self.TraitsImplementing<INotifyAttack>())
-			{
-				notify.PreparingAttack(self, target, null, null);
-				notify.Attacking(self, target, null, null);
-			}
+				notify.Attacking(self, target, armament, barrel);
 
 			return true;
 		}
@@ -105,10 +100,12 @@ namespace OpenRA.Mods.D2k.Activities
 			switch (stance)
 			{
 				case AttackState.Uninitialized:
-					GrantUpgrades(self);
 					stance = AttackState.Burrowed;
 					countdown = swallow.Info.AttackDelay;
 					burrowLocation = self.Location;
+					if (conditionManager != null && attackingToken == ConditionManager.InvalidConditionToken &&
+							!string.IsNullOrEmpty(swallow.Info.AttackingCondition))
+						attackingToken = conditionManager.GrantCondition(self, swallow.Info.AttackingCondition);
 					break;
 				case AttackState.Burrowed:
 					if (--countdown > 0)
@@ -119,14 +116,14 @@ namespace OpenRA.Mods.D2k.Activities
 					// The target has moved too far away
 					if ((burrowLocation - targetLocation).Length > NearEnough)
 					{
-						RevokeUpgrades(self);
+						RevokeCondition(self);
 						return NextActivity;
 					}
 
 					// The target reached solid ground
 					if (!positionable.CanEnterCell(targetLocation, null, false))
 					{
-						RevokeUpgrades(self);
+						RevokeCondition(self);
 						return NextActivity;
 					}
 
@@ -135,7 +132,7 @@ namespace OpenRA.Mods.D2k.Activities
 
 					if (!targets.Any())
 					{
-						RevokeUpgrades(self);
+						RevokeCondition(self);
 						return NextActivity;
 					}
 
@@ -158,23 +155,17 @@ namespace OpenRA.Mods.D2k.Activities
 						self.World.AddFrameEndTask(w => self.Dispose());
 					}
 
-					RevokeUpgrades(self);
+					RevokeCondition(self);
 					return NextActivity;
 			}
 
 			return this;
 		}
 
-		void GrantUpgrades(Actor self)
+		void RevokeCondition(Actor self)
 		{
-			foreach (var up in swallow.Info.AttackingUpgrades)
-				manager.GrantUpgrade(self, up, this);
-		}
-
-		void RevokeUpgrades(Actor self)
-		{
-			foreach (var up in swallow.Info.AttackingUpgrades)
-				manager.RevokeUpgrade(self, up, this);
+			if (attackingToken != ConditionManager.InvalidConditionToken)
+				attackingToken = conditionManager.RevokeCondition(self, attackingToken);
 		}
 	}
 }

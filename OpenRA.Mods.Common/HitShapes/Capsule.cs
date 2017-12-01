@@ -1,6 +1,6 @@
-﻿#region Copyright & License Information
+#region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -119,6 +119,8 @@ namespace OpenRA.Mods.Common.HitShapes
 			RangeCircleRenderable.DrawRangeCircle(wr, bb, Radius, 1, c, 0, c);
 			wcr.DrawLine(new[] { wr.Screen3DPosition(aa - offset2), wr.Screen3DPosition(bb - offset2) }, 1, c);
 			wcr.DrawLine(new[] { wr.Screen3DPosition(aa + offset2), wr.Screen3DPosition(bb + offset2) }, 1, c);
+
+			RangeCircleRenderable.DrawRangeCircle(wr, actorPos, OuterRadius, 1, Color.LimeGreen, 0, Color.LimeGreen);
 		}
 	}
 }

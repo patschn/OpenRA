@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -24,8 +24,7 @@ namespace OpenRA.Mods.Common.Activities
 		readonly HarvesterInfo harvInfo;
 		readonly Mobile mobile;
 		readonly MobileInfo mobileInfo;
-		readonly ResourceLayer resLayer;
-		readonly ResourceClaimLayer territory;
+		readonly ResourceClaimLayer claimLayer;
 		readonly IPathFinder pathFinder;
 		readonly DomainIndex domainIndex;
 
@@ -37,8 +36,7 @@ namespace OpenRA.Mods.Common.Activities
 			harvInfo = self.Info.TraitInfo<HarvesterInfo>();
 			mobile = self.Trait<Mobile>();
 			mobileInfo = self.Info.TraitInfo<MobileInfo>();
-			resLayer = self.World.WorldActor.Trait<ResourceLayer>();
-			territory = self.World.WorldActor.TraitOrDefault<ResourceClaimLayer>();
+			claimLayer = self.World.WorldActor.Trait<ResourceClaimLayer>();
 			pathFinder = self.World.WorldActor.Trait<IPathFinder>();
 			domainIndex = self.World.WorldActor.Trait<DomainIndex>();
 		}
@@ -51,8 +49,11 @@ namespace OpenRA.Mods.Common.Activities
 
 		public override Activity Tick(Actor self)
 		{
-			if (IsCanceled || NextActivity != null)
+			if (IsCanceled)
 				return NextActivity;
+
+			if (NextInQueue != null)
+				return NextInQueue;
 
 			var deliver = new DeliverResources(self);
 
@@ -81,14 +82,14 @@ namespace OpenRA.Mods.Common.Activities
 				var randFrames = self.World.SharedRandom.Next(100, 175);
 
 				// Avoid creating an activity cycle
-				var next = NextActivity;
-				NextActivity = null;
+				var next = NextInQueue;
+				NextInQueue = null;
 				return ActivityUtils.SequenceActivities(next, new Wait(randFrames), this);
 			}
 			else
 			{
-				// Attempt to claim a resource as ours
-				if (territory != null && !territory.ClaimResource(self, closestHarvestablePosition.Value))
+				// Attempt to claim the target cell
+				if (!claimLayer.TryClaimCell(self, closestHarvestablePosition.Value))
 					return ActivityUtils.SequenceActivities(new Wait(25), this);
 
 				// If not given a direct order, assume ordered to the first resource location we find:
@@ -112,7 +113,7 @@ namespace OpenRA.Mods.Common.Activities
 		/// </summary>
 		CPos? ClosestHarvestablePos(Actor self)
 		{
-			if (self.CanHarvestAt(self.Location, resLayer, harvInfo, territory))
+			if (harv.CanHarvestCell(self, self.Location) && claimLayer.CanClaimCell(self, self.Location))
 				return self.Location;
 
 			// Determine where to search from and how far to search:
@@ -123,8 +124,8 @@ namespace OpenRA.Mods.Common.Activities
 			// Find any harvestable resources:
 			var passable = (uint)mobileInfo.GetMovementClass(self.World.Map.Rules.TileSet);
 			List<CPos> path;
-			using (var search = PathSearch.Search(self.World, mobileInfo, self, true,
-				loc => domainIndex.IsPassable(self.Location, loc, passable) && self.CanHarvestAt(loc, resLayer, harvInfo, territory))
+			using (var search = PathSearch.Search(self.World, mobileInfo, self, true, loc =>
+					domainIndex.IsPassable(self.Location, loc, mobileInfo, passable) && harv.CanHarvestCell(self, loc) && claimLayer.CanClaimCell(self, loc))
 				.WithCustomCost(loc =>
 				{
 					if ((avoidCell.HasValue && loc == avoidCell.Value) ||

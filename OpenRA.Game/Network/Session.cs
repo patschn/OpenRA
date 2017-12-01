@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -90,9 +90,14 @@ namespace OpenRA.Network
 			return Slots.FirstOrDefault(s => !s.Value.Closed && ClientInSlot(s.Key) == null && s.Value.AllowBots).Key;
 		}
 
-		public bool IsSinglePlayer
+		public IEnumerable<Client> NonBotClients
 		{
-			get { return Clients.Count(c => c.Bot == null) == 1; }
+			get { return Clients.Where(c => c.Bot == null); }
+		}
+
+		public IEnumerable<Client> NonBotPlayers
+		{
+			get { return Clients.Where(c => c.Bot == null && c.Slot != null); }
 		}
 
 		public enum ClientState { NotReady, Invalid, Ready, Disconnected = 1000 }

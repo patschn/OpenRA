@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -82,7 +82,7 @@ namespace OpenRA.FileFormats
 								case "PLTE":
 									{
 										palette = new Color[256];
-										for (var i = 0; i < 256; i++)
+										for (var i = 0; i < length / 3; i++)
 										{
 											var r = cr.ReadByte(); var g = cr.ReadByte(); var b = cr.ReadByte();
 											palette[i] = Color.FromArgb(r, g, b);

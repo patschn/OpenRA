@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -45,7 +45,7 @@ namespace OpenRA.Mods.Common.Traits
 			correctFaction = factionsList.Count == 0 || factionsList.Contains(self.Owner.Faction.InternalName);
 		}
 
-		public void Selling(Actor self) { }
+		void INotifySold.Selling(Actor self) { }
 
 		void Emit(Actor self)
 		{
@@ -66,7 +66,9 @@ namespace OpenRA.Mods.Common.Traits
 					dudesValue = 0;
 			}
 
-			var eligibleLocations = FootprintUtils.Tiles(self).ToList();
+			var buildingInfo = self.Info.TraitInfoOrDefault<BuildingInfo>();
+
+			var eligibleLocations = buildingInfo != null ? buildingInfo.Tiles(self.Location).ToList() : new List<CPos>();
 			var actorTypes = info.ActorTypes.Select(a => new { Name = a, Cost = self.World.Map.Rules.Actors[a].TraitInfo<ValuedInfo>().Cost }).ToList();
 
 			while (eligibleLocations.Count > 0 && actorTypes.Any(a => a.Cost <= dudesValue))
@@ -85,6 +87,6 @@ namespace OpenRA.Mods.Common.Traits
 			}
 		}
 
-		public void Sold(Actor self) { Emit(self); }
+		void INotifySold.Sold(Actor self) { Emit(self); }
 	}
 }

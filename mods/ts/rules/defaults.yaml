@@ -5,7 +5,7 @@
 	GivesExperience:
 		PlayerExperienceModifier: 1
 	ScriptTriggers:
-	UpgradeManager:
+	ConditionManager:
 	RenderDebugState:
 
 ^SpriteActor:
@@ -17,76 +17,141 @@
 
 ^GainsExperience:
 	GainsExperience:
-		Upgrades:
-			500: rank, firepower, damage, speed, reload
-			1000: rank, firepower, damage, speed, reload, selfheal, eliteweapon
-	FirepowerMultiplier@EXPERIENCE:
-		UpgradeTypes: firepower
-		Modifier: 110, 130
-	DamageMultiplier@EXPERIENCE:
-		UpgradeTypes: damage
-		Modifier: 90, 75
-	SpeedMultiplier@EXPERIENCE:
-		UpgradeTypes: speed
-		Modifier: 120, 140
-	ReloadDelayMultiplier@EXPERIENCE:
-		UpgradeTypes: reload
-		Modifier: 90, 75
+		Conditions:
+			500: rank
+			1000: rank
+	GrantCondition@RANK-VETERAN:
+		RequiresCondition: rank == 1
+		Condition: rank-veteran
+	GrantCondition@RANK-ELITE:
+		RequiresCondition: rank >= 2
+		Condition: rank-elite
+	FirepowerMultiplier@VETERAN:
+		RequiresCondition: rank-veteran
+		Modifier: 110
+	FirepowerMultiplier@ELITE:
+		RequiresCondition: rank-elite
+		Modifier: 130
+	DamageMultiplier@VETERAN:
+		RequiresCondition: rank-veteran
+		Modifier: 90
+	DamageMultiplier@ELITE:
+		RequiresCondition: rank-elite
+		Modifier: 75
+	SpeedMultiplier@VETERAN:
+		RequiresCondition: rank-veteran
+		Modifier: 120
+	SpeedMultiplier@ELITE:
+		RequiresCondition: rank-elite
+		Modifier: 140
+	ReloadDelayMultiplier@VETERAN:
+		RequiresCondition: rank-veteran
+		Modifier: 90
+	ReloadDelayMultiplier@ELITE:
+		RequiresCondition: rank-elite
+		Modifier: 75
 	SelfHealing@ELITE:
 		Step: 2
 		Delay: 100
 		HealIfBelow: 100
 		DamageCooldown: 125
-		UpgradeTypes: selfheal
-		UpgradeMinEnabledLevel: 1
-	WithRankDecoration:
+		RequiresCondition: rank-elite
+	WithDecoration@VETERAN:
 		Image: rank
-		Sequence: rank
+		Sequence: veteran
 		Palette: ra
 		ReferencePoint: Bottom, Right
-		UpgradeTypes: rank
+		RequiresCondition: rank-veteran
 		ZOffset: 256
-		UpgradeMinEnabledLevel: 1
-		UpgradeMaxAcceptedLevel: 2
+	WithDecoration@ELITE:
+		Image: rank
+		Sequence: elite
+		Palette: ra
+		ReferencePoint: Bottom, Right
+		RequiresCondition: rank-elite
+		ZOffset: 256
+
+^CrateStatModifiers:
+	FirepowerMultiplier@CRATES:
+		RequiresCondition: crate-firepower
+		Modifier: 200
+	DamageMultiplier@CRATES:
+		RequiresCondition: crate-damage
+		Modifier: 50
+	SpeedMultiplier@CRATES:
+		RequiresCondition: crate-speed
+		Modifier: 170
+	ExternalCondition@CRATE-FIREPOWER:
+		Condition: crate-firepower
+	ExternalCondition@CRATE-DAMAGE:
+		Condition: crate-damage
+	ExternalCondition@CRATE-SPEED:
+		Condition: crate-speed
 
 ^EmpDisable:
-	UpgradeOverlay@EMPDISABLE:
-		UpgradeTypes: empdisable
-		UpgradeMinEnabledLevel: 1
+	WithColoredOverlay@EMPDISABLE:
+		RequiresCondition: empdisable
 		Palette: disabled
-	DisableOnUpgrade@EMPDISABLE:
-		UpgradeTypes: empdisable
-		UpgradeMinEnabledLevel: 1
-	TimedUpgradeBar@EMPDISABLE:
-		Upgrade: empdisable
+	DisableOnCondition@EMPDISABLE:
+		RequiresCondition: empdisable
+	TimedConditionBar@EMPDISABLE:
+		Condition: empdisable
 		Color: FFFFFF
 	WithIdleOverlay@EMPDISABLE:
 		Sequence: emp-overlay
 		Palette: effect
-		UpgradeTypes: empdisable
+		RequiresCondition: empdisable
 		ShowToEnemies: true
 		ZOffset: 512
-		UpgradeMinEnabledLevel: 1
 	PowerMultiplier@EMPDISABLE:
-		UpgradeTypes: empdisable
+		RequiresCondition: empdisable
 		Modifier: 0
-
-^EmpDisableMobile:
-	Inherits: ^EmpDisable
-	Mobile:
-		UpgradeTypes: notmobile
-		UpgradeMaxEnabledLevel: 0
+	ExternalCondition@EMPDISABLE:
+		Condition: empdisable
 
 ^Cloakable:
-	Cloak@CLOAKGENERATOR:
-		UpgradeTypes: cloakgenerator
-		UpgradeMinEnabledLevel: 1
+	Cloak@EXTERNALCLOAK:
+		RequiresCondition: cloakgenerator || crate-cloak
 		InitialDelay: 0
 		CloakDelay: 90
 		IsPlayerPalette: true
 		CloakSound: cloak5.aud
 		UncloakSound: cloak5.aud
-		UncloakOn: Attack, Unload, Infiltrate, Demolish, Damage
+		UncloakOn: Attack, Unload, Infiltrate, Demolish, Damage, Heal
+	ExternalCondition@CLOAKGENERATOR:
+		Condition: cloakgenerator
+	ExternalCondition@CRATE-CLOAK:
+		Condition: crate-cloak
+
+^AutoTargetGround:
+	AutoTarget:
+		AttackAnythingCondition: stance-attackanything
+	AutoTargetPriority@DEFAULT:
+		RequiresCondition: !stance-attackanything
+		ValidTargets: Infantry, Vehicle, Creep, Water, Defense
+		InvalidTargets: NoAutoTarget
+	AutoTargetPriority@ATTACKANYTHING:
+		RequiresCondition: stance-attackanything
+		ValidTargets: Infantry, Vehicle, Creep, Water, Structure, Defense
+		InvalidTargets: NoAutoTarget
+
+^AutoTargetAir:
+	AutoTarget:
+	AutoTargetPriority@DEFAULT:
+		ValidTargets: Air
+		InvalidTargets: NoAutoTarget
+
+^AutoTargetAll:
+	AutoTarget:
+		AttackAnythingCondition: stance-attackanything
+	AutoTargetPriority@DEFAULT:
+		RequiresCondition: !stance-attackanything
+		ValidTargets: Infantry, Vehicle, Creep, Water, Air, Defense
+		InvalidTargets: NoAutoTarget
+	AutoTargetPriority@ATTACKANYTHING:
+		RequiresCondition: stance-attackanything
+		ValidTargets: Infantry, Vehicle, Creep, Water, Air, Structure, Defense
+		InvalidTargets: NoAutoTarget
 
 ^BasicBuilding:
 	Inherits@1: ^ExistsInWorld
@@ -100,6 +165,8 @@
 		Priority: 3
 	Targetable:
 		TargetTypes: Ground, Building, C4
+	HitShape:
+		UseOccupiedCellsOffsets: true
 	Building:
 		Dimensions: 1,1
 		Footprint: x
@@ -111,14 +178,25 @@
 		DamagedSounds: expnew01.aud
 		DestroyedSounds: crmble2.aud
 	WithSpriteBody:
-	WithBuildingExplosion:
-		Sequences: building, large_bang, large_brnl, verylarge_clsn, large_tumu
+	Explodes:
+		Weapon: BuildingExplosions
+		EmptyWeapon: BuildingExplosions
+		Type: Footprint
 	EngineerRepairable:
 	ShakeOnDeath:
-	AcceptsSupplies:
 	Guardable:
 		Range: 3c0
 	Demolishable:
+	ThrowsShrapnel@SMALL:
+		Weapons: SmallDebris
+		Pieces: 2, 4
+		Range: 2c0, 5c0
+	ThrowsShrapnel@LARGE:
+		Weapons: LargeDebris, LargeDebrisWithTrail
+		Pieces: 1, 2
+		Range: 2c0, 5c0
+	EditorTilesetFilter:
+		Categories: Building
 
 ^Building:
 	Inherits@1: ^BasicBuilding
@@ -143,10 +221,10 @@
 	Sellable:
 		SellSounds: cashturn.aud
 	WithMakeAnimation:
-	ThrowsShrapnel:
-		Weapons: LargeDebris
-		Pieces: 3, 7
-		Range: 2c0, 5c0
+	ThrowsShrapnel@SMALL:
+		Pieces: 3, 5
+	ThrowsShrapnel@LARGE:
+		Pieces: 2, 3
 
 ^CivBuilding:
 	Inherits: ^BasicBuilding
@@ -157,10 +235,26 @@
 		Type: Wood
 	RevealsShroud:
 		Range: 4c0
-	Tooltip:
-		Description: Civilian Building
+		MaxHeightDelta: 3
 	RenderSprites:
 		Palette: terraindecoration
+	EditorTilesetFilter:
+		Categories: Civilian building
+
+^OldBase:
+	Inherits: ^CivBuilding
+	Building:
+		Footprint: xx xx
+		Dimensions: 2, 2
+	Armor:
+		Type: heavy
+	Health:
+		HP: 400
+	RenderSprites:
+		-Palette:
+	-Cloak@EXTERNALCLOAK:
+	-ExternalCondition@CLOAKGENERATOR:
+	-ExternalCondition@CRATE-CLOAK:
 
 ^CivBillboard:
 	Inherits: ^CivBuilding
@@ -173,6 +267,12 @@
 		HP: 400
 	EditorTilesetFilter:
 		RequireTilesets: TEMPERATE
+	ThrowsShrapnel@SMALL:
+		Pieces: 1, 3
+	ThrowsShrapnel@LARGE:
+		Pieces: 1, 1
+	EditorTilesetFilter:
+		Categories: Billboard
 
 ^Crate:
 	HiddenUnderFog:
@@ -187,6 +287,8 @@
 		Images: crate
 	CustomSelectionSize:
 		CustomBounds: 24,24
+	EditorTilesetFilter:
+		Categories: System
 
 ^Wall:
 	Inherits@1: ^SpriteActor
@@ -214,18 +316,20 @@
 		TargetTypes: Ground, Wall, C4
 	WithWallSpriteBody:
 		Type: wall
-	AutoTargetIgnore:
 	Sellable:
 		SellSounds: cashturn.aud
 	Demolishable:
 	ScriptTriggers:
-	UpgradeManager:
+	ConditionManager:
 	Health:
-		Shape: Rectangle
-			RotateToIsometry: true
-			TopLeft: -384, -384
-			BottomRight: 384, 384
-			VerticalTopOffset: 512
+	HitShape:
+		Type: Rectangle
+			LocalYaw: 128
+			TopLeft: -512, -512
+			BottomRight: 512, 512
+			VerticalTopOffset: 768
+	EditorTilesetFilter:
+		Categories: Wall
 
 ^BuildingPlug:
 	AlwaysVisible:
@@ -236,23 +340,22 @@
 	RenderSprites:
 
 ^Infantry:
-	Inherits@1: ^GainsExperience
 	Inherits@2: ^ExistsInWorld
 	Inherits@3: ^SpriteActor
 	Inherits@4: ^Cloakable
+	Inherits@CRATESTATS: ^CrateStatModifiers
 	Huntable:
 	DrawLineToTarget:
 	Health:
 		HP: 50
-		Shape: Circle
-			Radius: 128
-			VerticalTopOffset: 512
 	Armor:
 		Type: None
 	Valued:
 		Cost: 10
 	RevealsShroud:
+		RequiresCondition: !inside-tunnel
 		Range: 2c0
+		MaxHeightDelta: 3
 	Mobile:
 		Voice: Move
 		Speed: 71
@@ -261,6 +364,7 @@
 		TerrainSpeeds:
 			Clear: 90
 			Road: 100
+			Bridge: 100
 			Rail: 90
 			DirtRoad: 100
 			Rough: 80
@@ -269,19 +373,20 @@
 			BlueTiberium: 90
 				PathingCost: 90
 			Veins: 50
+		TunnelCondition: inside-tunnel
 	WithTextControlGroupDecoration:
 	SelectionDecorations:
 		Palette: pips
 	Selectable:
-		Bounds: 14,23,-1,-9
+		Bounds: 15,23,0,-9
 	Voiced:
 		VoiceSet: Infantry
 	Targetable:
+		RequiresCondition: !inside-tunnel
 		TargetTypes: Ground, Infantry
 	QuantizeFacingsFromSequence:
 		Sequence: stand
 	WithInfantryBody:
-	AutoTarget:
 	AttackMove:
 		Voice: Move
 	Passenger:
@@ -294,6 +399,7 @@
 		Damage: 2
 		DamageInterval: 16
 		DamageTypes: ExplosionDeath, TriggerVisceroid
+		RequiresCondition: !inside-tunnel
 	Guard:
 		Voice: Move
 	Guardable:
@@ -302,18 +408,24 @@
 		Delay: 100
 		HealIfBelow: 100
 		DamageCooldown: 125
-		UpgradeTypes: hospitalheal
-		UpgradeMinEnabledLevel: 1
-	GlobalUpgradable@HOSPITAL:
-		Upgrades: hospitalheal
+		RequiresCondition: hospitalheal
+	GrantConditionOnPrerequisite@HOSPITAL:
+		Condition: hospitalheal
 		Prerequisites: cahosp
 	WithDecoration@REDCROSS:
 		Image: pips
 		Sequence: medic
 		Palette: pips
 		ReferencePoint: Bottom, Right
-		UpgradeTypes: hospitalheal
-		UpgradeMinEnabledLevel: 1
+		RequiresCondition: hospitalheal
+	RevealOnFire:
+	EntersTunnels:
+		Voice: Move
+	HitShape:
+		Type: Circle
+			Radius: 128
+	EditorTilesetFilter:
+		Categories: Infantry
 
 ^RegularInfantryDeath:
 	WithDeathAnimation@normal:
@@ -375,12 +487,13 @@
 			Prone100Percent: 100
 			Prone350Percent: 350
 		DamageTriggers: TriggerProne
+		ProneOffset: 300,0,0
 	WithInfantryBody:
 		IdleSequences: idle1,idle2
 
 ^Cyborg:
 	Inherits@1: ^Infantry
-	Inherits@2: ^EmpDisableMobile
+	Inherits@2: ^EmpDisable
 	Inherits@3: ^HealsOnTiberium
 	ExplosionOnDamageTransition:
 		Weapon: CyborgExplode
@@ -395,15 +508,17 @@
 	MustBeDestroyed:
 	WithPermanentInjury:
 	WithInfantryBody:
-		AttackSequence: attack
+		DefaultAttackSequence: attack
 		IdleSequences: idle1,idle2
-	UpgradeOnDamageState@CRITICAL:
-		Upgrades: criticalspeed
+	GrantConditionOnDamageState@CRITICAL:
+		Condition: criticalspeed
 		ValidDamageStates: Critical
 		GrantPermanently: true
 	SpeedMultiplier@CRITICAL:
-		UpgradeTypes: criticalspeed
+		RequiresCondition: criticalspeed
 		Modifier: 50
+	Mobile:
+		RequiresCondition: !empdisable
 
 ^CivilianInfantry:
 	Inherits@1: ^Infantry
@@ -416,13 +531,15 @@
 	Wanders:
 		MinMoveDelay: 150
 		MaxMoveDelay: 750
+	EditorTilesetFilter:
+		Categories: Civilian infantry
 
 ^Vehicle:
-	Inherits@1: ^GainsExperience
 	Inherits@2: ^ExistsInWorld
-	Inherits@3: ^EmpDisableMobile
+	Inherits@3: ^EmpDisable
 	Inherits@4: ^Cloakable
 	Inherits@5: ^DamagedByVeins
+	Inherits@CRATESTATS: ^CrateStatModifiers
 	Huntable:
 	DrawLineToTarget:
 	Mobile:
@@ -430,6 +547,7 @@
 		TerrainSpeeds:
 			Clear: 70
 			Road: 100
+			Bridge: 100
 			Rail: 50
 			DirtRoad: 90
 			Rough: 40
@@ -439,6 +557,8 @@
 				PathingCost: 90
 		TurnSpeed: 5
 		Voice: Move
+		RequiresCondition: !empdisable
+		TunnelCondition: inside-tunnel
 	Selectable:
 		Bounds: 40,24
 	WithTextControlGroupDecoration:
@@ -447,6 +567,7 @@
 	Voiced:
 		VoiceSet: Vehicle
 	Targetable:
+		RequiresCondition: !inside-tunnel
 		TargetTypes: Ground, Vehicle, Repair
 	Repairable:
 		RepairBuildings: gadept
@@ -476,19 +597,26 @@
 		Weapons: SmallDebris
 		Pieces: 3, 7
 		Range: 2c0, 5c0
-	UpgradeOnDamageState@DAMAGED:
-		Upgrades: damagedspeed
+	GrantConditionOnDamageState@DAMAGED:
+		Condition: damagedspeed
 		ValidDamageStates: Heavy
-	UpgradeOnDamageState@CRITICAL:
-		Upgrades: criticalspeed
+	GrantConditionOnDamageState@CRITICAL:
+		Condition: criticalspeed
 		ValidDamageStates: Critical
 	SpeedMultiplier@DAMAGED:
-		UpgradeTypes: damagedspeed
+		RequiresCondition: damagedspeed
 		Modifier: 80
 	SpeedMultiplier@CRITICAL:
-		UpgradeTypes: criticalspeed
+		RequiresCondition: criticalspeed
 		Modifier: 60
 	Carryable:
+		RequiresCondition: !inside-tunnel
+	RevealOnFire:
+	EntersTunnels:
+		Voice: Move
+	HitShape:
+	EditorTilesetFilter:
+		Categories: Vehicle
 
 ^Tank:
 	Inherits: ^Vehicle
@@ -497,6 +625,7 @@
 		TerrainSpeeds:
 			Clear: 70
 			Road: 100
+			Bridge: 100
 			Rail: 100
 			DirtRoad: 90
 			Rough: 60
@@ -504,22 +633,15 @@
 			BlueTiberium: 70
 			Veins: 70
 
-^VoxelVehicle:
-	Inherits: ^Vehicle
-	BodyOrientation:
-		QuantizedFacings: 0
-	RenderVoxels:
-	WithVoxelBody:
-
-^VoxelTank:
-	Inherits: ^Tank
+^VoxelActor:
 	BodyOrientation:
 		QuantizedFacings: 0
 	RenderVoxels:
 	WithVoxelBody:
 
 ^CivilianVoxelVehicle:
-	Inherits: ^VoxelVehicle
+	Inherits: ^Vehicle
+	Inherits: ^VoxelActor
 	-MustBeDestroyed:
 
 ^CivilianVoxelCrusher:
@@ -528,7 +650,6 @@
 		Crushes: wall, crate, infantry
 
 ^Aircraft:
-	Inherits@1: ^GainsExperience
 	Inherits@2: ^ExistsInWorld
 	Inherits@3: ^Cloakable
 	Huntable:
@@ -537,19 +658,16 @@
 		UseLocation: true
 	Targetable@GROUND:
 		TargetTypes: Ground, Vehicle
-		UpgradeTypes: airborne
-		UpgradeMaxEnabledLevel: 0
+		RequiresCondition: !airborne
 	Targetable@AIRBORNE:
 		TargetTypes: Air
-		UpgradeTypes: airborne
-		UpgradeMinEnabledLevel: 1
+		RequiresCondition: airborne
 	Selectable:
 	WithTextControlGroupDecoration:
 	SelectionDecorations:
 		Palette: pips
 	Aircraft:
-		AirborneUpgrades: airborne
-		CruisingUpgrades: cruising
+		AirborneCondition: airborne
 		RepairBuildings: gadept
 		RearmBuildings: gahpad, nahpad
 		LandWhenIdle: false
@@ -558,7 +676,7 @@
 	Voiced:
 		VoiceSet: Heli
 	HiddenUnderFog:
-		Type: CenterPosition
+		Type: GroundPosition
 	AttackMove:
 		Voice: Move
 	ActorLostNotification:
@@ -571,21 +689,19 @@
 	MustBeDestroyed:
 	RenderVoxels:
 	WithVoxelBody:
+	RevealOnFire:
+	HitShape:
+	EditorTilesetFilter:
+		Categories: Aircraft
 
 ^Helicopter:
 	Inherits: ^Aircraft
 	Aircraft:
 		CruiseAltitude: 2048
 		CanHover: True
+		CruisingCondition: cruising
 	Hovers@CRUISING:
-		UpgradeTypes: cruising
-		UpgradeMinEnabledLevel: 1
-
-^Plane:
-	Inherits: ^Aircraft
-	Aircraft:
-		CruiseAltitude: 2560
-	ReturnOnIdle:
+		RequiresCondition: cruising
 
 ^AircraftHusk:
 	RenderVoxels:
@@ -595,15 +711,12 @@
 		QuantizedFacings: 0
 		CameraPitch: 90
 	Aircraft:
-		AirborneUpgrades: airborne
-		CruisingUpgrades: cruising
 	Health:
 		HP: 280
 	Armor:
 		Type: Heavy
 	HiddenUnderFog:
-		Type: CenterPosition
-	AutoTargetIgnore:
+		Type: GroundPosition
 	ScriptTriggers:
 	Tooltip:
 		GenericName: Destroyed Aircraft
@@ -611,6 +724,9 @@
 		Spins: true
 		Moves: true
 		Velocity: 86
+	HitShape:
+	EditorTilesetFilter:
+		Categories: Husk
 
 ^Visceroid:
 	Inherits@1: ^ExistsInWorld
@@ -619,25 +735,23 @@
 	Huntable:
 	DrawLineToTarget:
 	Health:
-		Shape: Circle
-			Radius: 256
-			VerticalTopOffset: 512
 	Armor:
 		Type: Light
 	Mobile:
 		Speed: 113
 		TurnSpeed: 16
-		Crushes: crate
 		SharesCell: no
 		TerrainSpeeds:
 			Clear: 90
 			Road: 100
+			Bridge: 100
 			Rail: 80
 			DirtRoad: 90
 			Rough: 70
 			Tiberium: 100
 			BlueTiberium: 100
 			Veins: 100
+		TunnelCondition: inside-tunnel
 	WithTextControlGroupDecoration:
 	SelectionDecorations:
 		Palette: pips
@@ -648,7 +762,16 @@
 	AttackMove:
 	HiddenUnderFog:
 	Guardable:
-	WithSpriteBody:
+	WithFacingSpriteBody:
+	RevealOnFire:
+	EntersTunnels:
+		Voice: Move
+	HitShape:
+		Type: Circle
+			Radius: 256
+			VerticalTopOffset: 512
+	EditorTilesetFilter:
+		Categories: Critter
 
 ^BlossomTree:
 	Inherits@1: ^SpriteActor
@@ -668,6 +791,8 @@
 		ResourceType: Tiberium
 		Interval: 55
 	WithIdleAnimation:
+	EditorTilesetFilter:
+		Categories: Resource spawn
 
 ^Tree:
 	Inherits@1: ^SpriteActor
@@ -683,6 +808,8 @@
 		Terrain: Tree
 	Tooltip:
 		Name: Tree
+	EditorTilesetFilter:
+		Categories: Tree
 
 ^Rock:
 	Inherits@1: ^SpriteActor
@@ -698,6 +825,8 @@
 		Terrain: Rock
 	Tooltip:
 		Name: Rock
+	EditorTilesetFilter:
+		Categories: Decoration
 
 ^Decoration:
 	Inherits@1: ^SpriteActor
@@ -708,6 +837,8 @@
 	Building:
 		Footprint: x
 		Dimensions: 1, 1
+	EditorTilesetFilter:
+		Categories: Decoration
 
 ^Box:
 	Inherits: ^Decoration
@@ -727,44 +858,18 @@
 ^Defense:
 	Inherits: ^Building
 	-GivesBuildableArea:
-	AutoTarget:
 	RenderRangeCircle:
 	RenderDetectionCircle:
 	RevealsShroud:
 		Range: 6c0
 	DetectCloaked:
 		Range: 5c0
-
-^DeployedVehicle:
-	Inherits@1: ^GainsExperience
-	Inherits@2: ^ExistsInWorld
-	Inherits@3: ^SpriteActor
-	Huntable:
-	Voiced:
-		VoiceSet: Vehicle
-	AttackTurreted:
-		Voice: Attack
-	AutoTarget:
-	RenderRangeCircle:
-	DrawLineToTarget:
-	Building:
-		Dimensions: 1,1
-		Footprint: x
-		TerrainTypes: Clear, Road, DirtRoad, Rough
-	WithSpriteBody:
-	WithMakeAnimation:
-	WithTextControlGroupDecoration:
-	SelectionDecorations:
-		Palette: pips
-	Selectable:
-	Targetable:
-		TargetTypes: Ground, Building, Repair
-	Guardable:
-	HiddenUnderFog:
-	ActorLostNotification:
+	RevealOnFire:
+	EditorTilesetFilter:
+		Categories: Defense
 
 ^Train:
-	Inherits@1: ^EmpDisableMobile
+	Inherits@1: ^EmpDisable
 	Inherits@2: ^ExistsInWorld
 	Inherits@3: ^Cloakable
 	Huntable:
@@ -779,16 +884,19 @@
 		TurnSpeed: 5
 		Voice: Move
 		Speed: 113
+		RequiresCondition: !empdisable
+		TunnelCondition: inside-tunnel
 	Cargo:
 		Types: Infantry
 		UnloadVoice: Unload
-		LoadingUpgrades: notmobile
 	Health:
 		HP: 100
 	Armor:
 		Type: Light
 	RevealsShroud:
 		Range: 5c0
+		MaxHeightDelta: 3
+		RequiresCondition: !inside-tunnel
 	Selectable:
 		Bounds: 40,24
 	WithTextControlGroupDecoration:
@@ -812,6 +920,9 @@
 		Weapons: SmallDebris
 		Pieces: 3, 7
 		Range: 2c0, 5c0
+	HitShape:
+	EditorTilesetFilter:
+		Categories: Railway
 
 ^TerrainOverlay:
 	AlwaysVisible:
@@ -829,11 +940,29 @@
 	EditorOnlyTooltip:
 		Name: Railway
 	AutoSelectionSize:
+	ChangesTerrain:
+		TerrainType: Rail
+	EditorTilesetFilter:
+		Categories: Railway
 
 ^Tunnel:
-	Inherits: ^TerrainOverlay
+	RenderSprites:
+		Palette: terraindecoration
+	WithSpriteBody:
+	BodyOrientation:
+		UseClassicPerspectiveFudge: False
+		QuantizedFacings: 1
+	Building:
+		Dimensions: 3, 3
+		Footprint: ___ ___ ___
 	CustomSelectionSize:
-		CustomBounds: 220,220
+		CustomBounds: 144, 144
+	Targetable:
+	AlwaysVisible:
+	TunnelEntrance:
+		Dimensions: 3, 3
+	EditorTilesetFilter:
+		Categories: Tunnel
 
 ^Gate:
 	Inherits: ^Building
@@ -854,17 +983,27 @@
 	WithGateSpriteBody:
 		OpenSequence: open
 	Tooltip:
-		Description: Automated barrier that opens for allied units.
 	Gate:
 		Adjacent: 4
 		BuildSounds: place2.aud
 		OpeningSound: gateup1.aud
 		ClosingSound: gatedwn1.aud
 		TerrainTypes: Clear, Rough, Road, DirtRoad, Green, Sand, Pavement
-		BlocksProjectilesHeight: 640
+		BlocksProjectilesHeight: 768
+	Buildable:
+		Description: Automated barrier that opens for allied units.
+	HitShape:
+		Type: Rectangle
+			LocalYaw: 128
+			TopLeft: -512, -512
+			BottomRight: 512, 512
+			VerticalTopOffset: 768
+	EditorTilesetFilter:
+		Categories: Wall
 
 ^Gate_A:
 	Inherits: ^Gate
+	Health:
 	Gate:
 		Dimensions: 3,1
 		Footprint: xxx
@@ -872,9 +1011,14 @@
 		WallConnections: -1,0, 3,0
 	LineBuildNode:
 		Connections: -1,0, 1,0
+	HitShape:
+		Type: Rectangle
+			TopLeft: -512, -1536
+			BottomRight: 512, 1536
 
 ^Gate_B:
 	Inherits: ^Gate
+	Health:
 	Gate:
 		Dimensions: 1,3
 		Footprint: x x x
@@ -882,42 +1026,17 @@
 		WallConnections: 0,-1, 0,3
 	LineBuildNode:
 		Connections: 0,-1, 0,1
-
-^LowBridge:
-	AlwaysVisible:
-	RenderSprites:
-		Palette: terraindecoration
-	WithSpriteBody:
-	AutoSelectionSize:
-	AppearsOnRadar:
-	RadarColorFromTerrain:
-		Terrain: Road
-	BodyOrientation:
-		UseClassicPerspectiveFudge: false
-		QuantizedFacings: 1
-	Tooltip:
-		Name: Bridge
-	Health:
-
-^LowBridge_A:
-	Inherits: ^LowBridge
-	Building:
-		Footprint: ___
-		Dimensions: 3, 1
-	LowBridge:
-
-^LowBridge_B:
-	Inherits: ^LowBridge
-	Building:
-		Footprint: _ _ _
-		Dimensions: 1, 3
-	LowBridge:
+	HitShape:
+		Type: Rectangle
+			TopLeft: -1536, -512
+			BottomRight: 1536, 512
 
 ^HealsOnTiberium:
 	DamagedByTerrain:
 		Damage: -2
 		DamageInterval: 16
 		Terrain: Tiberium, BlueTiberium
+		RequiresCondition: !inside-tunnel
 
 ^DamagedByVeins:
 	DamagedByTerrain@VEINS:
@@ -925,10 +1044,30 @@
 		DamageInterval: 16
 		DamageTypes: BulletDeath
 		Terrain: Veins
-	UpgradeOnTerrain@VEINS:
+		RequiresCondition: !inside-tunnel
+	LeavesTrails@VEINS:
+		Image: veins
+		Palette: player
 		TerrainTypes: Veins
-		Upgrades: veins
-	WithIdleOverlay@VEINS:
-		Sequence: veins
-		UpgradeTypes: veins
-		UpgradeMinEnabledLevel: 1
+		TrailWhileStationary: true
+		StationaryInterval: 16
+		MovingInterval: 16
+		StartDelay: -1
+		SpawnAtLastPosition: false
+		RequiresCondition: !inside-tunnel
+
+^DisabledOverlay:
+	WithColoredOverlay@IDISABLE:
+		RequiresCondition: disabled
+		Palette: disabled
+	GrantConditionOnDisabled@IDISABLE:
+		Condition: disabled
+
+^DisabledByPowerOutage:
+	AffectedByPowerOutage:
+		Condition: power-outage
+	InfiltrateForPowerOutage:
+	DisableOnCondition@POWER_OUTAGE:
+		RequiresCondition: power-outage
+	Power:
+		RequiresCondition: !power-outage

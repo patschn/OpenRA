@@ -28,8 +28,6 @@ World:
 		Type: LightningStrike
 	LuaScript:
 		Scripts: fort-lonestar.lua, fort-lonestar-AI.lua
-	ScriptUpgradesCache:
-		Upgrades: invulnerability
 	MapBuildRadius:
 		AllyBuildRadiusLocked: True
 		AllyBuildRadiusEnabled: True
@@ -69,11 +67,11 @@ FORTCRATE:
 	GiveUnitCrateAction@e7:
 		Units: e7
 		SelectionShares: 10
-	GrantUpgradeCrateAction@ironcurtain:
+	GrantExternalConditionCrateAction@ironcurtain:
 		SelectionShares: 10
 		Effect: invuln
 		Notification: ironcur9.aud
-		Upgrades: invulnerability
+		Condition: invulnerability
 		Duration: 1200
 	ExplodeCrateAction@bigboom:
 		Weapon: SCUD
@@ -102,6 +100,7 @@ Player:
 	-HackyAI@TurtleAI:
 	DummyAI@LonestarAI:
 		Name: Lonestar AI
+		Type: lonestar
 
 ^Infantry:
 	Inherits@IC: ^IronCurtainable
@@ -115,11 +114,11 @@ OILB:
 		HP: 3000
 	Armor:
 		Type: Wood
-	Bib:
+	WithBuildingBib:
 	RevealsShroud:
 		Range: 3c0
 	CashTrickler:
-		Period: 250
+		Interval: 250
 		Amount: 50
 
 MOBILETENT:

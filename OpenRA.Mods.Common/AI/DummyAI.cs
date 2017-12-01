@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -15,8 +15,14 @@ namespace OpenRA.Mods.Common.AI
 {
 	public sealed class DummyAIInfo : ITraitInfo, IBotInfo
 	{
-		[Desc("Ingame name this bot uses.")]
+		[Desc("Human-readable name this bot uses.")]
 		public readonly string Name = "Unnamed Bot";
+
+		[FieldLoader.Require]
+		[Desc("Internal id for this bot.")]
+		public readonly string Type = null;
+
+		string IBotInfo.Type { get { return Type; } }
 
 		string IBotInfo.Name { get { return Name; } }
 

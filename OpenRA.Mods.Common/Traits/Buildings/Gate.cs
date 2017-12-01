@@ -1,6 +1,6 @@
-﻿#region Copyright & License Information
+#region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -16,7 +16,7 @@ using OpenRA.Traits;
 namespace OpenRA.Mods.Common.Traits
 {
 	[Desc("Will open and be passable for actors that appear friendly when there are no enemies in range.")]
-	public class GateInfo : BuildingInfo
+	public class GateInfo : BuildingInfo, IBlocksProjectilesInfo
 	{
 		public readonly string OpeningSound = null;
 		public readonly string ClosingSound = null;
@@ -28,7 +28,7 @@ namespace OpenRA.Mods.Common.Traits
 		public readonly int TransitionDelay = 33;
 
 		[Desc("Blocks bullets scaled to open value.")]
-		public readonly int BlocksProjectilesHeight = 640;
+		public readonly WDist BlocksProjectilesHeight = new WDist(640);
 
 		public override object Create(ActorInitializer init) { return new Gate(init, this); }
 	}
@@ -62,7 +62,7 @@ namespace OpenRA.Mods.Common.Traits
 				// Gate was fully open
 				if (Position == OpenPosition)
 				{
-					Game.Sound.Play(info.ClosingSound, self.CenterPosition);
+					Game.Sound.Play(SoundType.World, info.ClosingSound, self.CenterPosition);
 					self.World.ActorMap.AddInfluence(self, this);
 				}
 
@@ -72,7 +72,7 @@ namespace OpenRA.Mods.Common.Traits
 			{
 				// Gate was fully closed
 				if (Position == 0)
-					Game.Sound.Play(info.OpeningSound, self.CenterPosition);
+					Game.Sound.Play(SoundType.World, info.OpeningSound, self.CenterPosition);
 
 				Position++;
 
@@ -117,7 +117,7 @@ namespace OpenRA.Mods.Common.Traits
 		public override void AddedToWorld(Actor self)
 		{
 			base.AddedToWorld(self);
-			blockedPositions = FootprintUtils.Tiles(self);
+			blockedPositions = Info.Tiles(self.Location);
 		}
 
 		bool IsBlocked()
@@ -129,7 +129,7 @@ namespace OpenRA.Mods.Common.Traits
 		{
 			get
 			{
-				return new WDist(info.BlocksProjectilesHeight * (OpenPosition - Position) / OpenPosition);
+				return new WDist(info.BlocksProjectilesHeight.Length * (OpenPosition - Position) / OpenPosition);
 			}
 		}
 	}

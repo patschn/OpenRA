@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -15,6 +15,7 @@ using System.Drawing;
 using System.Linq;
 using System.Net;
 using System.Text;
+using BeaconLib;
 using OpenRA.Network;
 using OpenRA.Server;
 using OpenRA.Widgets;
@@ -37,6 +38,8 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 		readonly Color gameStartedColor;
 		readonly Color incompatibleGameColor;
 		readonly ModData modData;
+		readonly WebServices services;
+		readonly Probe lanGameProbe;
 
 		GameServer currentServer;
 		MapPreview currentMap;
@@ -51,12 +54,13 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 		SearchStatus searchStatus = SearchStatus.Fetching;
 		Download currentQuery;
 		Widget serverList;
+		IEnumerable<BeaconLocation> lanGameLocations;
 
 		public string ProgressLabelText()
 		{
 			switch (searchStatus)
 			{
-				case SearchStatus.Failed: return "Failed to contact master server.";
+				case SearchStatus.Failed: return "Failed to query server list.";
 				case SearchStatus.NoGames: return "No games found. Try changing filters.";
 				default: return "";
 			}
@@ -68,6 +72,8 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			this.modData = modData;
 			this.onStart = onStart;
 			this.onExit = onExit;
+
+			services = modData.Manifest.Get<WebServices>();
 
 			incompatibleVersionColor = ChromeMetrics.Get<Color>("IncompatibleVersionColor");
 			incompatibleGameColor = ChromeMetrics.Get<Color>("IncompatibleGameColor");
@@ -104,6 +110,18 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 
 			widget.Get<ButtonWidget>("BACK_BUTTON").OnClick = () => { Ui.CloseWindow(); onExit(); };
 			Game.LoadWidget(null, "GLOBALCHAT_PANEL", widget.Get("GLOBALCHAT_ROOT"), new WidgetArgs());
+
+			lanGameLocations = new List<BeaconLocation>();
+			try
+			{
+				lanGameProbe = new Probe("OpenRALANGame");
+				lanGameProbe.BeaconsUpdated += locations => lanGameLocations = locations;
+				lanGameProbe.Start();
+			}
+			catch (Exception ex)
+			{
+				Log.Write("debug", "BeaconLib.Probe: " + ex.Message);
+			}
 
 			RefreshServerList();
 
@@ -300,23 +318,55 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			{
 				currentQuery = null;
 
-				if (i.Error != null)
+				List<GameServer> games = null;
+				if (i.Error == null)
 				{
-					RefreshServerListInner(null);
-					return;
+					try
+					{
+						var data = Encoding.UTF8.GetString(i.Result);
+						var yaml = MiniYaml.FromString(data);
+
+						games = yaml.Select(a => new GameServer(a.Value))
+							.Where(gs => gs.Address != null)
+							.ToList();
+					}
+					catch
+					{
+						searchStatus = SearchStatus.Failed;
+					}
 				}
 
-				var data = Encoding.UTF8.GetString(i.Result);
-				var yaml = MiniYaml.FromString(data);
+				var lanGames = new List<GameServer>();
+				foreach (var bl in lanGameLocations)
+				{
+					var game = MiniYaml.FromString(bl.Data)[0].Value;
+					var idNode = game.Nodes.FirstOrDefault(n => n.Key == "Id");
 
-				var games = yaml.Select(a => new GameServer(a.Value))
-					.Where(gs => gs.Address != null);
+					// Skip beacons created by this instance and replace Id by expected int value
+					if (idNode != null && idNode.Value.Value != Platform.SessionGUID.ToString())
+					{
+						idNode.Value.Value = "-1";
+
+						// Rewrite the server address with the correct IP
+						var addressNode = game.Nodes.FirstOrDefault(n => n.Key == "Address");
+						if (addressNode != null)
+							addressNode.Value.Value = bl.Address.ToString().Split(':')[0] + ":" + addressNode.Value.Value.Split(':')[1];
+
+						lanGames.Add(new GameServer(game));
+					}
+				}
+
+				var groupedLanGames = lanGames.GroupBy(gs => gs.Address).Select(g => g.Last());
+				if (games != null)
+					games.AddRange(groupedLanGames);
+				else if (groupedLanGames.Any())
+					games = groupedLanGames.ToList();
 
 				Game.RunAfterTick(() => RefreshServerListInner(games));
 			};
 
-			var queryURL = Game.Settings.Server.MasterServer + "games?version={0}&mod={1}&modversion={2}".F(
-				Uri.EscapeUriString(Game.Mods["modchooser"].Metadata.Version),
+			var queryURL = services.ServerList + "games?version={0}&mod={1}&modversion={2}".F(
+				Uri.EscapeUriString(Game.EngineVersion),
 				Uri.EscapeUriString(Game.ModData.Manifest.Id),
 				Uri.EscapeUriString(Game.ModData.Manifest.Metadata.Version));
 
@@ -327,14 +377,14 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 		{
 			// Games that we can't join are sorted last
 			if (!testEntry.IsCompatible)
-				return 0;
+				return testEntry.ModId == modData.Manifest.Id ? 1 : 0;
 
 			// Games for the current mod+version are sorted first
 			if (testEntry.ModId == modData.Manifest.Id)
-				return 2;
+				return testEntry.ModVersion == modData.Manifest.Metadata.Version ? 4 : 3;
 
 			// Followed by games for different mods that are joinable
-			return 1;
+			return 2;
 		}
 
 		void SelectServer(GameServer server)
@@ -343,103 +393,13 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			currentMap = server != null ? modData.MapCache[server.Map] : null;
 		}
 
-		void RefreshServerListInner(IEnumerable<GameServer> games)
+		void RefreshServerListInner(List<GameServer> games)
 		{
-			if (games == null)
-				return;
-
-			var mods = games.GroupBy(g => g.Mods)
-				.OrderByDescending(g => GroupSortOrder(g.First()))
-				.ThenByDescending(g => g.Count());
-
 			ScrollItemWidget nextServerRow = null;
-			var rows = new List<Widget>();
-			foreach (var modGames in mods)
-			{
-				if (modGames.All(Filtered))
-					continue;
+			List<Widget> rows = null;
 
-				var header = ScrollItemWidget.Setup(headerTemplate, () => true, () => { });
-
-				var headerTitle = modGames.First().ModLabel;
-				header.Get<LabelWidget>("LABEL").GetText = () => headerTitle;
-				rows.Add(header);
-
-				Func<GameServer, int> listOrder = g =>
-				{
-					// Servers waiting for players are always first
-					if (g.State == (int)ServerState.WaitingPlayers && g.Players > 0)
-						return 0;
-
-					// Then active games
-					if (g.State >= (int)ServerState.GameStarted)
-						return 1;
-
-					// Empty servers are shown at the end because a flood of empty servers
-					// at the top of the game list make the community look dead
-					return 2;
-				};
-
-				foreach (var loop in modGames.OrderBy(listOrder).ThenByDescending(g => g.Players))
-				{
-					var game = loop;
-					if (game == null || Filtered(game))
-						continue;
-
-					var canJoin = game.IsJoinable;
-					var item = ScrollItemWidget.Setup(serverTemplate, () => currentServer == game, () => SelectServer(game), () => Join(game));
-					var title = item.GetOrNull<LabelWidget>("TITLE");
-					if (title != null)
-					{
-						var font = Game.Renderer.Fonts[title.Font];
-						var label = WidgetUtils.TruncateText(game.Name, title.Bounds.Width, font);
-						title.GetText = () => label;
-						title.GetColor = () => canJoin ? title.TextColor : incompatibleGameColor;
-					}
-
-					var password = item.GetOrNull<ImageWidget>("PASSWORD_PROTECTED");
-					if (password != null)
-					{
-						password.IsVisible = () => game.Protected;
-						password.GetImageName = () => canJoin ? "protected" : "protected-disabled";
-					}
-
-					var players = item.GetOrNull<LabelWidget>("PLAYERS");
-					if (players != null)
-					{
-						players.GetText = () => "{0} / {1}".F(game.Players, game.MaxPlayers)
-							+ (game.Spectators > 0 ? " + {0}".F(game.Spectators) : "");
-
-						players.GetColor = () => canJoin ? players.TextColor : incompatibleGameColor;
-					}
-
-					var state = item.GetOrNull<LabelWidget>("STATUS");
-					if (state != null)
-					{
-						var label = game.State >= (int)ServerState.GameStarted ?
-							"Playing" : "Waiting";
-						state.GetText = () => label;
-
-						var color = GetStateColor(game, state, !canJoin);
-						state.GetColor = () => color;
-					}
-
-					var location = item.GetOrNull<LabelWidget>("LOCATION");
-					if (location != null)
-					{
-						var font = Game.Renderer.Fonts[location.Font];
-						var cachedServerLocation = GeoIP.LookupCountry(game.Address.Split(':')[0]);
-						var label = WidgetUtils.TruncateText(cachedServerLocation, location.Bounds.Width, font);
-						location.GetText = () => label;
-						location.GetColor = () => canJoin ? location.TextColor : incompatibleGameColor;
-					}
-
-					if (currentServer != null && game.Address == currentServer.Address)
-						nextServerRow = item;
-
-					rows.Add(item);
-				}
-			}
+			if (games != null)
+				rows = LoadGameRows(games, out nextServerRow);
 
 			Game.RunAfterTick(() =>
 			{
@@ -462,7 +422,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 
 				// Search for any unknown maps
 				if (Game.Settings.Game.AllowDownloading)
-					modData.MapCache.QueryRemoteMapDetails(games.Where(g => !Filtered(g)).Select(g => g.Map));
+					modData.MapCache.QueryRemoteMapDetails(services.MapRepository, games.Where(g => !Filtered(g)).Select(g => g.Map));
 
 				foreach (var row in rows)
 					serverList.AddChild(row);
@@ -470,6 +430,111 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 				if (nextServerRow != null)
 					nextServerRow.OnClick();
 			});
+		}
+
+		List<Widget> LoadGameRows(List<GameServer> games, out ScrollItemWidget nextServerRow)
+		{
+			nextServerRow = null;
+			var rows = new List<Widget>();
+			var mods = games.GroupBy(g => g.Mods)
+				.OrderByDescending(g => GroupSortOrder(g.First()))
+				.ThenByDescending(g => g.Count());
+
+			foreach (var modGames in mods)
+			{
+				if (modGames.All(Filtered))
+					continue;
+
+				var header = ScrollItemWidget.Setup(headerTemplate, () => true, () => { });
+
+				var headerTitle = modGames.First().ModLabel;
+				header.Get<LabelWidget>("LABEL").GetText = () => headerTitle;
+				rows.Add(header);
+
+				Func<GameServer, int> listOrder = g =>
+				{
+					// Servers waiting for players are always first
+					if (g.State == (int)ServerState.WaitingPlayers && g.Players > 0)
+						return 0;
+
+					// Then servers with spectators
+					if (g.State == (int)ServerState.WaitingPlayers && g.Spectators > 0)
+						return 1;
+
+					// Then active games
+					if (g.State >= (int)ServerState.GameStarted)
+						return 2;
+
+					// Empty servers are shown at the end because a flood of empty servers
+					// at the top of the game list make the community look dead
+					return 3;
+				};
+
+				foreach (var modGamesByState in modGames.GroupBy(listOrder).OrderBy(g => g.Key))
+				{
+					// Sort 'Playing' games by Started, others by number of players
+					foreach (var game in modGamesByState.Key == 2 ? modGamesByState.OrderByDescending(g => g.Started) : modGamesByState.OrderByDescending(g => g.Players))
+					{
+						if (Filtered(game))
+							continue;
+
+						var canJoin = game.IsJoinable;
+						var item = ScrollItemWidget.Setup(serverTemplate, () => currentServer == game, () => SelectServer(game), () => Join(game));
+						var title = item.GetOrNull<LabelWidget>("TITLE");
+						if (title != null)
+						{
+							var font = Game.Renderer.Fonts[title.Font];
+							var label = WidgetUtils.TruncateText(game.Name, title.Bounds.Width, font);
+							title.GetText = () => label;
+							title.GetColor = () => canJoin ? title.TextColor : incompatibleGameColor;
+						}
+
+						var password = item.GetOrNull<ImageWidget>("PASSWORD_PROTECTED");
+						if (password != null)
+						{
+							password.IsVisible = () => game.Protected;
+							password.GetImageName = () => canJoin ? "protected" : "protected-disabled";
+						}
+
+						var players = item.GetOrNull<LabelWidget>("PLAYERS");
+						if (players != null)
+						{
+							players.GetText = () => "{0} / {1}".F(game.Players, game.MaxPlayers)
+								+ (game.Spectators > 0 ? " + {0}".F(game.Spectators) : "");
+
+							players.GetColor = () => canJoin ? players.TextColor : incompatibleGameColor;
+						}
+
+						var state = item.GetOrNull<LabelWidget>("STATUS");
+						if (state != null)
+						{
+							var label = game.State >= (int)ServerState.GameStarted ?
+								"Playing" : "Waiting";
+							state.GetText = () => label;
+
+							var color = GetStateColor(game, state, !canJoin);
+							state.GetColor = () => color;
+						}
+
+						var location = item.GetOrNull<LabelWidget>("LOCATION");
+						if (location != null)
+						{
+							var font = Game.Renderer.Fonts[location.Font];
+							var cachedServerLocation = game.Id != -1 ? GeoIP.LookupCountry(game.Address.Split(':')[0]) : "Local Network";
+							var label = WidgetUtils.TruncateText(cachedServerLocation, location.Bounds.Width, font);
+							location.GetText = () => label;
+							location.GetColor = () => canJoin ? location.TextColor : incompatibleGameColor;
+						}
+
+						if (currentServer != null && game.Address == currentServer.Address)
+							nextServerRow = item;
+
+						rows.Add(item);
+					}
+				}
+			}
+
+			return rows;
 		}
 
 		void OpenLobby()
@@ -580,6 +645,19 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 				return true;
 
 			return false;
+		}
+
+		bool disposed;
+		protected override void Dispose(bool disposing)
+		{
+			if (disposing && !disposed)
+			{
+				disposed = true;
+				if (lanGameProbe != null)
+					lanGameProbe.Dispose();
+			}
+
+			base.Dispose(disposing);
 		}
 	}
 }

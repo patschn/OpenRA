@@ -1,6 +1,7 @@
 ^BasicInfantry:
 	Defaults:
 		Tick: 80
+		Offset: 0, 0, 16
 	stand:
 		Facings: 8
 		ShadowStart: 292
@@ -43,7 +44,7 @@
 		ShadowStart: 451
 		Tick: 800
 		ZOffset: -511
-	standup-0:
+	standup:
 		Start: 260
 		Length: 2
 		Facings: 8
@@ -182,6 +183,7 @@ civ3:
 cyborg:
 	Defaults:
 		Tick: 80
+		Offset: 0, 0, 16
 	stand:
 		Facings: 8
 		ShadowStart: 370
@@ -225,9 +227,12 @@ cyborg:
 	icon: cybiicon
 
 cyc2:
+	Defaults:
+		Offset: 0, 0, 16
 	stand:
 		Facings: 8
 		ShadowStart: 308
+		Offset: 0, 0, 16
 	run:
 		Start: 8
 		Length: 9
@@ -270,6 +275,7 @@ cyc2:
 medic:
 	Defaults:
 		Tick: 80
+		Offset: 0, 0, 16
 	stand:
 		Facings: 8
 		ShadowStart: 307
@@ -312,7 +318,7 @@ medic:
 		ShadowStart: 451
 		Tick: 800
 		ZOffset: -511
-	standup-0:
+	standup:
 		Start: 260
 		Length: 2
 		Facings: 8
@@ -328,6 +334,7 @@ medic:
 jumpjet:
 	Defaults:
 		Tick: 80
+		Offset: 0, 0, 16
 	stand:
 		Facings: 8
 		ShadowStart: 451
@@ -352,14 +359,24 @@ jumpjet:
 	prone-stand:
 		Facings: 8
 		ShadowStart: 451
+	flying:
+		Facings: 8
+		Length: 6
+		Start: 292
+		ShadowStart: 743
 	die-twirling: # TODO: animation for falling from sky starts at 436
 		Start: 445
 		Length: 6
 		ShadowStart: 896
+	die-falling:
+		Start: 436
+		Length: 9
 	die-flying: # TODO: animation for falling from sky starts at 436
 		Start: 445
 		Length: 6
 		ShadowStart: 896
+	die-splash: h2o_exp2
+		Length: *
 	die-exploding: s_bang34
 		Length: *
 	die-crushed:
@@ -372,12 +389,17 @@ jumpjet:
 		Length: 6
 		Facings: 8
 		ShadowStart: 615
+	flying-attack:
+		Start: 388
+		Facings: 8
+		Length: 6
+		ShadowStart: 839
 	prone-attack:
 		Start: 212
 		Length: 6
 		Facings: 8
 		ShadowStart: 663
-	standup-0:
+	standup:
 		Start: 260
 		Length: 2
 		Facings: 8
@@ -389,6 +411,7 @@ jumpjet:
 weedguy:
 	Defaults: weed
 		Tick: 80
+		Offset: 0, 0, 16
 	stand:
 		Facings: 8
 		ShadowStart: 202
@@ -402,21 +425,22 @@ weedguy:
 		Facings: 8
 		ShadowStart: 258
 	prone-attack:
-		Start: 56
+		Start: 64
 		Facings: 8
-		ShadowStart: 258
-	standup-0:
+		Stride: 6
+		ShadowStart: 288
+	standup:
 		Start: 112
 		Length: 2
 		Facings: 8
 		ShadowStart: 314
 	prone-run:
-		Start: 86
+		Start: 64
 		Length: 6
 		Facings: 8
 		ShadowStart: 288
 	prone-stand:
-		Start: 86
+		Start: 64
 		Facings: 8
 		Stride: 6
 		ShadowStart: 288
@@ -452,80 +476,12 @@ weedguy:
 		ShadowStart: 376
 		Tick: 1000
 
-doggie:
-	Defaults:
-		Tick: 80
-	stand:
-		Facings: 8
-		ShadowStart: 119
-	run:
-		Start: 8
-		Length: 6
-		Facings: 8
-		ShadowStart: 127
-	attack:
-		Start: 56
-		Length: 4
-		Facings: 8
-		ShadowStart: 175
-	laydown: # TODO: Implement hiding when on a tiberium patch
-		Start: 88
-		Length: 2
-		ShadowStart: 207
-	hide: # TODO: Implement hiding when on a tiberium patch
-		Start: 90
-		ShadowStart: 209
-	idle1:
-		Start: 91
-		Length: 8
-		ShadowStart: 210
-	die-twirling:
-		Start: 99
-		Length: 10
-		ShadowStart: 218
-	die-flying:
-		Start: 99
-		Length: 10
-		ShadowStart: 218
-	die-exploding: s_bang34
-		Length: *
-	die-crushed:
-		Start: 105
-		Length: 4
-		ShadowStart: 224
-		Tick: 800
-		ZOffset: -511
-	die-burning:
-		Start: 109
-		Length: 10
-		ShadowStart: 228
-	die-melting:
-		Start: 109
-		Length: 10
-		ShadowStart: 228
-
-vissml:
-	idle:
-		Length: 90
-		ShadowStart: 90
-		Tick: 80
-
-vislrg:
-	idle:
-		Length: 90
-		ShadowStart: 90
-		Tick: 80
-	muzzle: vislgatk # TODO: unused
-		Length: 5
-		Facings: 8
-		ShadowStart: 40
-		Tick: 80
-
 flameguy:
 	Defaults:
 		Facings: 8
 		Tick: 80
 		ShadowStart: 148
+		Offset: 0, 0, 16
 	idle:
 	stand:
 	run:

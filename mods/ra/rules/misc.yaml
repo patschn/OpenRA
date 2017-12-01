@@ -1,12 +1,19 @@
-MINP:
-	Inherits: ^Mine
-	Explodes:
-		Weapon: APMine
-
 MINV:
 	Inherits: ^Mine
+	RenderSprites:
+		Image: minv
+		FactionImages:
+			soviet: minp
+			russia: minp
+			ukraine: minp
 	Explodes:
 		Weapon: ATMine
+
+# Only kept for backwards-compatibility with existing and imported maps, use MINV instead
+MINP:
+	Inherits: MINV
+	Explodes:
+		Weapon: APMine
 
 CRATE:
 	Inherits: ^Crate
@@ -90,11 +97,11 @@ CRATE:
 		Units: e1,e1,e4,e4,e3,e3,e3
 		ValidFactions: soviet, russia, ukraine
 		TimeDelay: 4500
-	GrantUpgradeCrateAction@invuln:
+	GrantExternalConditionCrateAction@invuln:
 		SelectionShares: 5
 		Effect: invuln
 		Notification: ironcur9.aud
-		Upgrades: invulnerability
+		Condition: invulnerability
 		Duration: 600
 
 MONEYCRATE:
@@ -143,6 +150,8 @@ CAMERA:
 	WithSpriteBody:
 	RenderSpritesEditorOnly:
 		Image: camera
+	EditorTilesetFilter:
+		Categories: System
 
 camera.paradrop:
 	Inherits: CAMERA
@@ -185,6 +194,8 @@ FLARE:
 		Name: Flare
 		ShowOwnerRow: false
 	AutoSelectionSize:
+	EditorTilesetFilter:
+		Categories: Decoration
 
 MINE:
 	Inherits@1: ^SpriteActor
@@ -200,8 +211,9 @@ MINE:
 	AppearsOnRadar:
 	RadarColorFromTerrain:
 		Terrain: Ore
-	AutoTargetIgnore:
 	SeedsResource:
+	EditorTilesetFilter:
+		Categories: Resource spawn
 
 GMINE:
 	Inherits@1: ^SpriteActor
@@ -217,9 +229,10 @@ GMINE:
 	AppearsOnRadar:
 	RadarColorFromTerrain:
 		Terrain: Gems
-	AutoTargetIgnore:
 	SeedsResource:
 		ResourceType: Gems
+	EditorTilesetFilter:
+		Categories: Resource spawn
 
 RAILMINE:
 	Inherits@1: ^SpriteActor
@@ -232,12 +245,13 @@ RAILMINE:
 	Building:
 		Footprint: xx
 		Dimensions: 2,1
-	AutoTargetIgnore:
 	EditorTilesetFilter:
 		ExcludeTilesets: INTERIOR
+		Categories: Civilian building
 
 QUEE:
 	Inherits@1: ^SpriteActor
+	Inherits@shape: ^2x1Shape
 	HiddenUnderShroud:
 	Tooltip:
 		Name: Queen Ant
@@ -248,9 +262,11 @@ QUEE:
 	AppearsOnRadar:
 	EditorTilesetFilter:
 		RequireTilesets: INTERIOR
+		Categories: Critter
 
 LAR1:
 	Inherits@1: ^SpriteActor
+	Inherits@shape: ^1x1Shape
 	HiddenUnderShroud:
 	Tooltip:
 		Name: Ant Larva
@@ -263,6 +279,7 @@ LAR1:
 	AppearsOnRadar:
 	EditorTilesetFilter:
 		RequireTilesets: INTERIOR
+		Categories: Critter
 
 LAR2:
 	Inherits@1: LAR1
@@ -283,6 +300,9 @@ powerproxy.parabombs:
 		DisplayBeacon: True
 		BeaconPoster: pbmbicon
 		CameraActor: camera
+		ArrowSequence: arrow
+		ClockSequence: clock
+		CircleSequence: circles
 
 powerproxy.sonarpulse:
 	AlwaysVisible:
@@ -312,6 +332,9 @@ powerproxy.paratroopers:
 		CameraActor: camera.paradrop
 		DisplayBeacon: true
 		BeaconPoster: pinficon
+		ArrowSequence: arrow
+		ClockSequence: clock
+		CircleSequence: circles
 
 barracks.upgraded:
 	AlwaysVisible:
@@ -335,6 +358,8 @@ mpspawn:
 	RenderSpritesEditorOnly:
 	BodyOrientation:
 		QuantizedFacings: 1
+	EditorTilesetFilter:
+		Categories: System
 
 waypoint:
 	EditorOnlyTooltip:
@@ -346,6 +371,8 @@ waypoint:
 	RenderSpritesEditorOnly:
 	BodyOrientation:
 		QuantizedFacings: 1
+	EditorTilesetFilter:
+		Categories: System
 
 ^fact.colorpicker:
 	Inherits: FACT
@@ -360,10 +387,13 @@ CTFLAG:
 		Dimensions: 1,1
 	Tooltip:
 		Name: Flag
-	Bib:
+	WithBuildingBib:
 		HasMinibib: Yes
-	DamageMultiplier@INVULNERABLE:
-		Modifier: 0
+	-HitShape:
+	-Health:
+	-Explodes:
 	-Selectable:
 	-SelectionDecorations:
 	-Targetable:
+	EditorTilesetFilter:
+		Categories: Decoration

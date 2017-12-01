@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -9,6 +9,7 @@
  */
 #endregion
 
+using System;
 using System.Drawing;
 using System.Linq;
 using OpenRA.Mods.Common.Commands;
@@ -47,7 +48,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			chatTraits = world.WorldActor.TraitsImplementing<INotifyChat>().ToArray();
 
 			var players = world.Players.Where(p => p != world.LocalPlayer && !p.NonCombatant && !p.IsBot);
-			disableTeamChat = world.IsReplay || world.LobbyInfo.IsSinglePlayer || (world.LocalPlayer != null && !players.Any(p => p.IsAlliedWith(world.LocalPlayer)));
+			disableTeamChat = world.IsReplay || world.LobbyInfo.NonBotClients.Count() == 1 || (world.LocalPlayer != null && !players.Any(p => p.IsAlliedWith(world.LocalPlayer)));
 			teamChat = !disableTeamChat;
 
 			tabCompletion.Commands = chatTraits.OfType<ChatCommands>().SelectMany(x => x.Commands.Keys).ToList();
@@ -67,12 +68,13 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			chatMode.IsDisabled = () => disableTeamChat;
 
 			chatText = chatChrome.Get<TextFieldWidget>("CHAT_TEXTFIELD");
+			chatText.MaxLength = UnitOrders.ChatMessageMaxLength;
 			chatText.OnEnterKey = () =>
 			{
 				var team = teamChat && !disableTeamChat;
 				if (chatText.Text != "")
 				{
-					if (!chatText.Text.StartsWith("/"))
+					if (!chatText.Text.StartsWith("/", StringComparison.Ordinal))
 						orderManager.IssueOrder(Order.Chat(team, chatText.Text.Trim()));
 					else if (chatTraits != null)
 					{

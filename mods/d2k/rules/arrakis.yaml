@@ -1,24 +1,32 @@
 spicebloom.spawnpoint:
-	HiddenUnderShroud:
-		Type: CenterPosition
+	EditorOnlyTooltip:
+		Name: Spice Bloom spawnpoint
+	AlwaysVisible:
+	RenderSpritesEditorOnly:
+		Image: spicebloom
+		Palette: effect50alpha
+	WithSpriteBody:
+		Sequence: grow3
 	BodyOrientation:
 		QuantizedFacings: 1
-	RenderSprites:
-		Image: spicebloom
-	SpiceBloom:
-		GrowthTerrainTypes: SpiceSand
-		SpawnActor: spicebloom
-		GrowthSequences: grow0
-		GrowthDelay: 250, 750
-		RespawnDelay: 1, 2
-	Explodes:
-		Weapon: BloomSpawn
-		EmptyWeapon: BloomSpawn
+	ConditionManager:
+	GrantConditionOnTerrain:
+		Condition: clearsand
+		TerrainTypes: SpiceSand
+	KillsSelf:
+		RequiresCondition: clearsand
+		Delay: 1750, 3250
+	SpawnActorOnDeath:
+		Actor: spicebloom
 	Health:
 		HP: 9999
-		Radius: 1
 	Immobile:
 		OccupiesSpace: false
+	HitShape:
+		Type: Circle
+			Radius: 1
+	EditorTilesetFilter:
+		Categories: System
 
 spicebloom:
 	HiddenUnderShroud:
@@ -43,21 +51,28 @@ spicebloom:
 	Immobile:
 	Health:
 		HP: 1
-		Radius: 512
 	Targetable:
 		TargetTypes: Ground
 		RequiresForceFire: true
 	Armor:
 		Type: none
+	SpawnActorOnDeath:
+		Actor: spicebloom.spawnpoint
+	HitShape:
+		Type: Circle
+			Radius: 512
+	EditorTilesetFilter:
+		Categories: System
 
 sandworm:
 	Inherits@1: ^SpriteActor
 	Tooltip:
 		Name: Sandworm
-		Description: Attracted by vibrations in the sand.\nWill eat units whole and has a large appetite.
 	Health:
 		HP: 9990
-		Radius: 256
+	HitShape:
+		Type: Circle
+			Radius: 256
 	Armor:
 		Type: heavy
 	Mobile:
@@ -68,18 +83,16 @@ sandworm:
 			SpiceSand: 100
 			Spice: 100
 	Targetable:
-		TargetTypes: Ground
+		TargetTypes: Ground, Creep
 	WithSpriteBody:
 	WithIdleAnimation:
 		Interval: 160
 		Sequences: lightninga, lightningb, lightningc, lightningd, lightninge, lightningf
-		UpgradeTypes: attacking
-		UpgradeMaxEnabledLevel: 0
+		RequiresCondition: !attacking
 	AmbientSound:
-		SoundFile: WRMSIGN1.WAV
+		SoundFiles: WRMSIGN1.WAV
 		Interval: 160
-		UpgradeTypes: attacking
-		UpgradeMaxEnabledLevel: 0
+		RequiresCondition: !attacking
 	WithAttackOverlay@mouth:
 		Sequence: mouth
 	WithAttackOverlay@sand:
@@ -90,6 +103,7 @@ sandworm:
 	AttackSwallow:
 		AttackRequiresEnteringCell: true
 		IgnoresVisibility: true
+		AttackingCondition: attacking
 	Armament:
 		Weapon: WormJaw
 	Sandworm:
@@ -107,9 +121,11 @@ sandworm:
 		Type: CenterPosition
 		TerrainTypes: Sand, Dune, SpiceSand, Spice
 		MovingInterval: 3
-		UpgradeTypes: attacking
-		UpgradeMaxEnabledLevel: 0
-	UpgradeManager:
+		RequiresCondition: !attacking
+	ConditionManager:
+	RevealOnFire:
+		Duration: 50
+		Radius: 2c512
 
 sietch:
 	Inherits: ^Building

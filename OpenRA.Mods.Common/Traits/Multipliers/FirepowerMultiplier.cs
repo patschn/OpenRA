@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -9,21 +9,23 @@
  */
 #endregion
 
-using OpenRA.Traits;
-
 namespace OpenRA.Mods.Common.Traits
 {
-	[Desc("The firepower of this actor is multiplied based on upgrade level if specified.")]
-	public class FirepowerMultiplierInfo : UpgradeMultiplierTraitInfo
+	[Desc("Modifies the damage applied by this actor.")]
+	public class FirepowerMultiplierInfo : ConditionalTraitInfo
 	{
-		public override object Create(ActorInitializer init) { return new FirepowerMultiplier(this, init.Self.Info.Name); }
+		[FieldLoader.Require]
+		[Desc("Percentage modifier to apply.")]
+		public readonly int Modifier = 100;
+
+		public override object Create(ActorInitializer init) { return new FirepowerMultiplier(this); }
 	}
 
-	public class FirepowerMultiplier : UpgradeMultiplierTrait, IFirepowerModifier
+	public class FirepowerMultiplier : ConditionalTrait<FirepowerMultiplierInfo>, IFirepowerModifier
 	{
-		public FirepowerMultiplier(FirepowerMultiplierInfo info, string actorType)
-			: base(info, "FirepowerMultiplier", actorType) { }
+		public FirepowerMultiplier(FirepowerMultiplierInfo info)
+			: base(info) { }
 
-		public int GetFirepowerModifier() { return GetModifier(); }
+		int IFirepowerModifier.GetFirepowerModifier() { return IsTraitDisabled ? 100 : Info.Modifier; }
 	}
 }

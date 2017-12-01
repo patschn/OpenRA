@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -101,8 +101,14 @@ namespace OpenRA.Mods.Common.Scripting
 			return Context.World.Map.CenterOfCell(cell);
 		}
 
+		[Desc("Returns the type of the terrain at the target cell.")]
+		public string TerrainType(CPos cell)
+		{
+			return Context.World.Map.GetTerrainInfo(cell).Type;
+		}
+
 		[Desc("Returns true if there is only one human player.")]
-		public bool IsSinglePlayer { get { return Context.World.LobbyInfo.IsSinglePlayer; } }
+		public bool IsSinglePlayer { get { return Context.World.LobbyInfo.NonBotPlayers.Count() == 1; } }
 
 		[Desc("Returns the difficulty selected by the player before starting the mission.")]
 		public string Difficulty

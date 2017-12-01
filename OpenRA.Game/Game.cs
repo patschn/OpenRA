@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -22,7 +22,6 @@ using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using OpenRA.Chat;
-using OpenRA.FileSystem;
 using OpenRA.Graphics;
 using OpenRA.Network;
 using OpenRA.Primitives;
@@ -38,6 +37,7 @@ namespace OpenRA
 		public const int TimestepJankThreshold = 250; // Don't catch up for delays larger than 250ms
 
 		public static InstalledMods Mods { get; private set; }
+		public static ExternalMods ExternalMods { get; private set; }
 
 		public static ModData ModData;
 		public static Settings Settings;
@@ -56,6 +56,8 @@ namespace OpenRA
 		public static bool BenchmarkMode = false;
 
 		public static GlobalChat GlobalChat;
+
+		public static string EngineVersion { get; private set; }
 
 		static Task discoverNat;
 
@@ -163,7 +165,7 @@ namespace OpenRA
 			using (new PerfTimer("PrepareMap"))
 				map = ModData.PrepareMap(mapUID);
 			using (new PerfTimer("NewWorld"))
-				OrderManager.World = new World(map, OrderManager, type);
+				OrderManager.World = new World(ModData, map, OrderManager, type);
 
 			worldRenderer = new WorldRenderer(ModData, OrderManager.World);
 
@@ -246,14 +248,26 @@ namespace OpenRA
 		{
 			Console.WriteLine("Platform is {0}", Platform.CurrentPlatform);
 
+			// Load the engine version as early as possible so it can be written to exception logs
+			try
+			{
+				EngineVersion = File.ReadAllText(Platform.ResolvePath(Path.Combine(".", "VERSION"))).Trim();
+			}
+			catch { }
+
+			if (string.IsNullOrEmpty(EngineVersion))
+				EngineVersion = "Unknown";
+
+			Console.WriteLine("Engine version is {0}", EngineVersion);
+
 			// Special case handling of Game.Mod argument: if it matches a real filesystem path
 			// then we use this to override the mod search path, and replace it with the mod id
-			var modArgument = args.GetValue("Game.Mod", null);
-			string customModPath = null;
-			if (modArgument != null && (File.Exists(modArgument) || Directory.Exists(modArgument)))
+			var modID = args.GetValue("Game.Mod", null);
+			var explicitModPaths = new string[0];
+			if (modID != null && (File.Exists(modID) || Directory.Exists(modID)))
 			{
-				customModPath = modArgument;
-				args.ReplaceValue("Game.Mod", Path.GetFileNameWithoutExtension(modArgument));
+				explicitModPaths = new[] { modID };
+				modID = Path.GetFileNameWithoutExtension(modID);
 			}
 
 			InitializeSettings(args);
@@ -304,34 +318,50 @@ namespace OpenRA
 
 			GeoIP.Initialize();
 
-			if (!Game.Settings.Server.DiscoverNatDevices)
-				Game.Settings.Server.AllowPortForward = false;
+			if (!Settings.Server.DiscoverNatDevices)
+				Settings.Server.AllowPortForward = false;
 			else
 			{
 				discoverNat = UPnP.DiscoverNatDevices(Settings.Server.NatDiscoveryTimeout);
-				Game.Settings.Server.AllowPortForward = true;
+				Settings.Server.AllowPortForward = true;
 			}
 
 			GlobalChat = new GlobalChat();
 
-			Mods = new InstalledMods(customModPath);
-			Console.WriteLine("Available mods:");
+			var modSearchArg = args.GetValue("Engine.ModSearchPaths", null);
+			var modSearchPaths = modSearchArg != null ?
+				FieldLoader.GetValue<string[]>("Engine.ModsPath", modSearchArg) :
+				new[] { Path.Combine(".", "mods") };
+
+			Mods = new InstalledMods(modSearchPaths, explicitModPaths);
+			Console.WriteLine("Internal mods:");
 			foreach (var mod in Mods)
 				Console.WriteLine("\t{0}: {1} ({2})", mod.Key, mod.Value.Metadata.Title, mod.Value.Metadata.Version);
 
-			InitializeMod(Settings.Game.Mod, args);
-		}
+			ExternalMods = new ExternalMods();
 
-		public static bool IsModInstalled(string modId)
-		{
-			return Mods.ContainsKey(modId) && Mods[modId].RequiresMods.All(IsModInstalled);
-		}
+			Manifest currentMod;
+			if (modID != null && Mods.TryGetValue(modID, out currentMod))
+			{
+				var launchPath = args.GetValue("Engine.LaunchPath", Assembly.GetEntryAssembly().Location);
 
-		public static bool IsModInstalled(KeyValuePair<string, string> mod)
-		{
-			return Mods.ContainsKey(mod.Key)
-				&& Mods[mod.Key].Metadata.Version == mod.Value
-				&& IsModInstalled(mod.Key);
+				// Sanitize input from platform-specific launchers
+				// Process.Start requires paths to not be quoted, even if they contain spaces
+				if (launchPath.First() == '"' && launchPath.Last() == '"')
+					launchPath = launchPath.Substring(1, launchPath.Length - 2);
+
+				ExternalMods.Register(Mods[modID], launchPath, ModRegistration.User);
+
+				ExternalMod activeMod;
+				if (ExternalMods.TryGetValue(ExternalMod.MakeKey(Mods[modID]), out activeMod))
+					ExternalMods.ClearInvalidRegistrations(activeMod, ModRegistration.User);
+			}
+
+			Console.WriteLine("External mods:");
+			foreach (var mod in ExternalMods)
+				Console.WriteLine("\t{0}: {1} ({2})", mod.Key, mod.Value.Title, mod.Value.Version);
+
+			InitializeMod(modID, args);
 		}
 
 		public static void InitializeMod(string mod, Arguments args)
@@ -361,26 +391,23 @@ namespace OpenRA
 
 			ModData = null;
 
-			// Fall back to default if the mod doesn't exist or has missing prerequisites.
-			if (!IsModInstalled(mod))
-				mod = new GameSettings().Mod;
+			if (mod == null)
+				throw new InvalidOperationException("Game.Mod argument missing.");
+
+			if (!Mods.ContainsKey(mod))
+				throw new InvalidOperationException("Unknown or invalid mod '{0}'.".F(mod));
 
 			Console.WriteLine("Loading mod: {0}", mod);
-			Settings.Game.Mod = mod;
 
 			Sound.StopVideo();
 
 			ModData = new ModData(Mods[mod], Mods, true);
 
+			if (!ModData.LoadScreen.BeforeLoad())
+				return;
+
 			using (new PerfTimer("LoadMaps"))
 				ModData.MapCache.LoadMaps();
-
-			// Mod assets are missing!
-			if (!ModData.LoadScreen.RequiredContentIsInstalled())
-			{
-				InitializeMod("modchooser", new Arguments());
-				return;
-			}
 
 			ModData.InitializeLoaders(ModData.DefaultFileSystem);
 			Renderer.InitializeFonts(ModData);
@@ -427,7 +454,7 @@ namespace OpenRA
 			{
 				Console.WriteLine("NAT discovery failed: {0}", e.Message);
 				Log.Write("nat", e.ToString());
-				Game.Settings.Server.AllowPortForward = false;
+				Settings.Server.AllowPortForward = false;
 			}
 
 			ModData.LoadScreen.StartGame(args);
@@ -456,6 +483,28 @@ namespace OpenRA
 				throw new InvalidDataException("No valid shellmaps available");
 
 			return shellmaps.Random(CosmeticRandom);
+		}
+
+		public static void SwitchToExternalMod(ExternalMod mod, string[] launchArguments = null, Action onFailed = null)
+		{
+			try
+			{
+				var args = launchArguments != null ? mod.LaunchArgs.Append(launchArguments) : mod.LaunchArgs;
+				var p = Process.Start(mod.LaunchPath, args.Select(a => "\"" + a + "\"").JoinWith(" "));
+				if (p == null || p.HasExited)
+					onFailed();
+				else
+				{
+					p.Close();
+					Exit();
+				}
+			}
+			catch (Exception e)
+			{
+				Log.Write("debug", "Failed to switch to external mod.");
+				Log.Write("debug", "Error was: " + e.Message);
+				onFailed();
+			}
 		}
 
 		static RunStatus state = RunStatus.Running;
@@ -509,8 +558,6 @@ namespace OpenRA
 				var integralTickTimestep = (uiTickDelta / Timestep) * Timestep;
 				Ui.LastTickTime += integralTickTimestep >= TimestepJankThreshold ? integralTickTimestep : Timestep;
 
-				Viewport.TicksSinceLastMove += uiTickDelta / Timestep;
-
 				Sync.CheckSyncUnchanged(world, Ui.Tick);
 				Cursor.Tick();
 			}
@@ -534,40 +581,36 @@ namespace OpenRA
 					if (world == null)
 						return;
 
-					// Don't tick when the shellmap is disabled
-					if (world.ShouldTick)
+					var isNetTick = LocalTick % NetTickScale == 0;
+
+					if (!isNetTick || orderManager.IsReadyForNextFrame)
 					{
-						var isNetTick = LocalTick % NetTickScale == 0;
+						++orderManager.LocalFrameNumber;
 
-						if (!isNetTick || orderManager.IsReadyForNextFrame)
+						Log.Write("debug", "--Tick: {0} ({1})", LocalTick, isNetTick ? "net" : "local");
+
+						if (BenchmarkMode)
+							Log.Write("cpu", "{0};{1}".F(LocalTick, PerfHistory.Items["tick_time"].LastValue));
+
+						if (isNetTick)
+							orderManager.Tick();
+
+						Sync.CheckSyncUnchanged(world, () =>
 						{
-							++orderManager.LocalFrameNumber;
+							world.OrderGenerator.Tick(world);
+							world.Selection.Tick(world);
+						});
 
-							Log.Write("debug", "--Tick: {0} ({1})", LocalTick, isNetTick ? "net" : "local");
+						world.Tick();
 
-							if (BenchmarkMode)
-								Log.Write("cpu", "{0};{1}".F(LocalTick, PerfHistory.Items["tick_time"].LastValue));
-
-							if (isNetTick)
-								orderManager.Tick();
-
-							Sync.CheckSyncUnchanged(world, () =>
-							{
-								world.OrderGenerator.Tick(world);
-								world.Selection.Tick(world);
-							});
-
-							world.Tick();
-
-							PerfHistory.Tick();
-						}
-						else if (orderManager.NetFrameNumber == 0)
-							orderManager.LastTickTime = RunTime;
-					}
-					else
 						PerfHistory.Tick();
+					}
+					else if (orderManager.NetFrameNumber == 0)
+						orderManager.LastTickTime = RunTime;
 
-					Sync.CheckSyncUnchanged(world, () => world.TickRender(worldRenderer));
+					// Wait until we have done our first world Tick before TickRendering
+					if (orderManager.LocalFrameNumber > 0)
+						Sync.CheckSyncUnchanged(world, () => world.TickRender(worldRenderer));
 				}
 			}
 		}
@@ -607,9 +650,9 @@ namespace OpenRA
 
 				using (new PerfSample("render_widgets"))
 				{
-					Renderer.WorldVoxelRenderer.BeginFrame();
+					Renderer.WorldModelRenderer.BeginFrame();
 					Ui.PrepareRenderables();
-					Renderer.WorldVoxelRenderer.EndFrame();
+					Renderer.WorldModelRenderer.EndFrame();
 
 					Ui.Draw();
 
@@ -775,11 +818,6 @@ namespace OpenRA
 		public static void Exit()
 		{
 			state = RunStatus.Success;
-		}
-
-		public static void Restart()
-		{
-			state = RunStatus.Restart;
 		}
 
 		public static void AddChatLine(Color color, string name, string text)

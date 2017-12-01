@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -18,7 +18,7 @@ using OpenRA.Traits;
 namespace OpenRA.Mods.Common.Traits
 {
 	[Desc("Building can be repaired by the repair button.")]
-	public class RepairableBuildingInfo : UpgradableTraitInfo, Requires<HealthInfo>
+	public class RepairableBuildingInfo : ConditionalTraitInfo, Requires<HealthInfo>
 	{
 		public readonly int RepairPercent = 20;
 		public readonly int RepairInterval = 24;
@@ -41,7 +41,7 @@ namespace OpenRA.Mods.Common.Traits
 		public override object Create(ActorInitializer init) { return new RepairableBuilding(init.Self, this); }
 	}
 
-	public class RepairableBuilding : UpgradableTrait<RepairableBuildingInfo>, ITick
+	public class RepairableBuilding : ConditionalTrait<RepairableBuildingInfo>, ITick
 	{
 		[Sync]
 		public int RepairersHash

@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -153,24 +153,26 @@ namespace OpenRA.Mods.Common.Traits
 	public class SupportPowerInstance
 	{
 		readonly SupportPowerManager manager;
-		readonly string key;
+
+		public readonly string Key;
 
 		public List<SupportPower> Instances;
 		public int RemainingTime;
 		public int TotalTime;
 		public bool Active { get; private set; }
-		public bool Disabled { get { return !prereqsAvailable || !upgradeAvailable; } }
+		public bool Disabled { get { return (!prereqsAvailable && !manager.DevMode.AllTech) || !instancesEnabled || oneShotFired; } }
 
 		public SupportPowerInfo Info { get { return Instances.Select(i => i.Info).FirstOrDefault(); } }
 		public bool Ready { get { return Active && RemainingTime == 0; } }
 
-		bool upgradeAvailable;
+		bool instancesEnabled;
 		bool prereqsAvailable = true;
+		bool oneShotFired;
 
 		public SupportPowerInstance(string key, SupportPowerManager manager)
 		{
 			this.manager = manager;
-			this.key = key;
+			Key = key;
 		}
 
 		public void PrerequisitesAvailable(bool available)
@@ -178,20 +180,15 @@ namespace OpenRA.Mods.Common.Traits
 			prereqsAvailable = available;
 		}
 
-		static bool InstanceDisabled(SupportPower sp)
-		{
-			return sp.Self.IsDisabled();
-		}
-
 		bool notifiedCharging;
 		bool notifiedReady;
 		public void Tick()
 		{
-			upgradeAvailable = Instances.Any(i => !i.IsTraitDisabled);
-			if (!upgradeAvailable)
+			instancesEnabled = Instances.Any(i => !i.IsTraitDisabled);
+			if (!instancesEnabled)
 				RemainingTime = TotalTime;
 
-			Active = !Disabled && Instances.Any(i => !i.Self.IsDisabled());
+			Active = !Disabled && Instances.Any(i => !i.IsTraitPaused);
 			if (!Active)
 				return;
 
@@ -205,14 +202,14 @@ namespace OpenRA.Mods.Common.Traits
 					--RemainingTime;
 				if (!notifiedCharging)
 				{
-					power.Charging(power.Self, key);
+					power.Charging(power.Self, Key);
 					notifiedCharging = true;
 				}
 
 				if (RemainingTime == 0
 					&& !notifiedReady)
 				{
-					power.Charged(power.Self, key);
+					power.Charged(power.Self, Key);
 					notifiedReady = true;
 				}
 			}
@@ -223,11 +220,11 @@ namespace OpenRA.Mods.Common.Traits
 			if (!Ready)
 				return;
 
-			var power = Instances.FirstOrDefault();
+			var power = Instances.FirstOrDefault(i => !i.IsTraitPaused);
 			if (power == null)
 				return;
 
-			power.SelectTarget(power.Self, key, manager);
+			power.SelectTarget(power.Self, Key, manager);
 		}
 
 		public void Activate(Order order)
@@ -235,7 +232,7 @@ namespace OpenRA.Mods.Common.Traits
 			if (!Ready)
 				return;
 
-			var power = Instances.Where(i => !InstanceDisabled(i))
+			var power = Instances.Where(i => !i.IsTraitPaused)
 				.MinByOrDefault(a =>
 				{
 					if (a.Self.OccupiesSpace == null)
@@ -253,7 +250,10 @@ namespace OpenRA.Mods.Common.Traits
 			notifiedCharging = notifiedReady = false;
 
 			if (Info.OneShot)
+			{
 				PrerequisitesAvailable(false);
+				oneShotFired = true;
+			}
 		}
 	}
 

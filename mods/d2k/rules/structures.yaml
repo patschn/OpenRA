@@ -10,23 +10,25 @@
 		TerrainTypes: Rock
 	Tooltip:
 		Name: Concrete
-		Description: Provides a strong foundation that prevents\ndamage from the terrain.
 	RenderSprites:
 	KillsSelf:
 		RemoveInstead: true
 	Buildable:
 		Queue: Building
-		Prerequisites: construction_yard
 		BuildPaletteOrder: 10
+		Description: Provides a strong foundation that prevents\ndamage from the terrain.
 
 concretea:
 	Inherits: ^concrete
 	Building:
 		Footprint: xx xx
 		Dimensions: 2,2
+	Tooltip:
+		Name: Concrete Slab
 	Valued:
 		Cost: 20
 	Buildable:
+		BuildPaletteOrder: 10
 		BuildDuration: 54
 		BuildDurationModifier: 40
 
@@ -35,28 +37,38 @@ concreteb:
 	Building:
 		Footprint: xxx xxx xxx
 		Dimensions: 3,3
+	Tooltip:
+		Name: Large Concrete Slab
 	Valued:
 		Cost: 50
 	Buildable:
-		Prerequisites: construction_yard, upgrade.conyard
+		BuildPaletteOrder: 40
+		Prerequisites: upgrade.conyard
 		BuildDuration: 81
 		BuildDurationModifier: 40
 
 construction_yard:
 	Inherits: ^Building
+	Buildable:
+		Description: Produces structures.
 	-DamagedByTerrain:
 	Building:
-		Footprint: xxx xxx
-		Dimensions: 3,2
+		Footprint: xxx xxx ===
+		Dimensions: 3,3
 		Adjacent: 4
+		LocalCenterOffset: 0,-512,0
 	LaysTerrain:
 		TerrainTypes: Rock
 		Template: 88
-	Bib:
+	WithBuildingBib:
 	Selectable:
 		Bounds: 96,64
 	Health:
 		HP: 3000
+	HitShape:
+		Type: Rectangle
+			TopLeft: -1536, -1024
+			BottomRight: 1536, 1024
 	Armor:
 		Type: cy
 	RevealsShroud:
@@ -86,47 +98,52 @@ construction_yard:
 	WithBuildingPlacedOverlay:
 		Palette: d2k
 	PrimaryBuilding:
+		PrimaryCondition: primary
 	ProvidesPrerequisite@buildingname:
-	GlobalUpgradable:
+	GrantConditionOnPrerequisite:
 		Prerequisites: upgrade.conyard
-		Upgrades: stardecoration
+		Condition: stardecoration
 	WithDecoration@upgraded:
 		RequiresSelection: true
 		Image: pips
 		Sequence: tag-upgraded
 		ReferencePoint: Top, Right
 		ZOffset: 256
-		UpgradeTypes: stardecoration
-		UpgradeMinEnabledLevel: 1
+		RequiresCondition: stardecoration
 	WithTextDecoration@primary:
 		RequiresSelection: true
 		Text: PRIMARY
 		ReferencePoint: Top
 		ZOffset: 256
-		UpgradeTypes: primary
-		UpgradeMinEnabledLevel: 1
+		RequiresCondition: primary
+	RevealOnDeath:
+		Radius: 5c768
 
 wind_trap:
 	Inherits: ^Building
 	Buildable:
 		Queue: Building
-		Prerequisites: construction_yard
-		BuildPaletteOrder: 10
+		BuildPaletteOrder: 20
 		BuildDuration: 180
 		BuildDurationModifier: 40
+		Description: Provides power for other structures.
 	Selectable:
 		Bounds: 64,64
 	Valued:
 		Cost: 225
 	Tooltip:
 		Name: Wind Trap
-		Description: Provides power for other structures
 	Building:
-		Footprint: xx xx
-		Dimensions: 2,2
-	Bib:
+		Footprint: xx xx ==
+		Dimensions: 2,3
+		LocalCenterOffset: 0,-512,0
+	WithBuildingBib:
 	Health:
 		HP: 3000
+	HitShape:
+		Type: Rectangle
+			TopLeft: -1024, -1024
+			BottomRight: 1024, 1024
 	Armor:
 		Type: building
 	RevealsShroud:
@@ -144,28 +161,35 @@ wind_trap:
 		Amount: 200
 	ScalePowerWithHealth:
 	ProvidesPrerequisite@buildingname:
+	RevealOnDeath:
+		Radius: 3c768
 
 barracks:
 	Inherits: ^Building
 	Buildable:
-		Prerequisites: construction_yard, wind_trap
+		Prerequisites: wind_trap
 		Queue: Building
-		BuildPaletteOrder: 40
+		BuildPaletteOrder: 50
 		BuildDuration: 231
 		BuildDurationModifier: 40
+		Description: Trains infantry.
 	Selectable:
 		Bounds: 64,64
 	Valued:
 		Cost: 225
 	Tooltip:
 		Name: Barracks
-		Description: Trains infantry
 	Building:
-		Footprint: xx xx
-		Dimensions: 2,2
-	Bib:
+		Footprint: xx xx ==
+		Dimensions: 2,3
+		LocalCenterOffset: 0,-512,0
+	WithBuildingBib:
 	Health:
 		HP: 3200
+	HitShape:
+		Type: Rectangle
+			TopLeft: -1024, -1024
+			BottomRight: 1024, 1024
 	Armor:
 		Type: wood
 	RevealsShroud:
@@ -181,6 +205,7 @@ barracks:
 	Production:
 		Produces: Infantry
 	PrimaryBuilding:
+		PrimaryCondition: primary
 	ProductionBar:
 	ProvidesPrerequisite@atreides:
 		Prerequisite: barracks.atreides
@@ -201,46 +226,55 @@ barracks:
 			smuggler: barracks.ordos
 			mercenary: barracks.ordos
 	ProvidesPrerequisite@buildingname:
-	GlobalUpgradable:
+	GrantConditionOnPrerequisite:
 		Prerequisites: upgrade.barracks
-		Upgrades: stardecoration
+		Condition: stardecoration
 	WithDecoration@upgraded:
 		RequiresSelection: true
 		Image: pips
 		Sequence: tag-upgraded
 		ReferencePoint: Top, Right
 		ZOffset: 256
-		UpgradeTypes: stardecoration
-		UpgradeMinEnabledLevel: 1
+		RequiresCondition: stardecoration
 	WithTextDecoration@primary:
 		RequiresSelection: true
 		Text: PRIMARY
 		ReferencePoint: Top
 		ZOffset: 256
-		UpgradeTypes: primary
-		UpgradeMinEnabledLevel: 1
+		RequiresCondition: primary
+	RevealOnDeath:
+		Radius: 3c768
 
 refinery:
 	Inherits: ^Building
 	Buildable:
-		Prerequisites: construction_yard, wind_trap
+		Prerequisites: wind_trap
 		Queue: Building
-		BuildPaletteOrder: 20
+		BuildPaletteOrder: 30
 		BuildDuration: 540
 		BuildDurationModifier: 40
+		Description: Harvesters unload Spice here for processing.
 	Selectable:
 		Bounds: 96,64
 	Valued:
 		Cost: 1500
 	Tooltip:
 		Name: Spice Refinery
-		Description: Harvesters unload Spice here for processing
 	Building:
-		Footprint: =xx xx=
-		Dimensions: 3,2
-	Bib:
+		Footprint: =xx xx= ===
+		Dimensions: 3,3
+		LocalCenterOffset: 0,-512,0
+	WithBuildingBib:
 	Health:
 		HP: 3000
+	HitShape:
+		Type: Rectangle
+			TopLeft: -512, -1024
+			BottomRight: 1536, 0
+	HitShape@BOTTOM:
+		Type: Rectangle
+			TopLeft: -1536, 0
+			BottomRight: 512, 1024
 	Armor:
 		Type: building
 	RevealsShroud:
@@ -278,18 +312,18 @@ refinery:
 silo:
 	Inherits: ^Building
 	Buildable:
-		Prerequisites: construction_yard, refinery
+		Prerequisites: refinery
 		Queue: Building
-		BuildPaletteOrder: 30
+		BuildPaletteOrder: 120
 		BuildDuration: 135
 		BuildDurationModifier: 40
+		Description: Stores excess harvested Spice.
 	Selectable:
 		Bounds: 32,32
 	Valued:
 		Cost: 120
 	Tooltip:
 		Name: Silo
-		Description: Stores excess harvested Spice
 	Building:
 		Adjacent: 4
 	-GivesBuildableArea:
@@ -321,28 +355,36 @@ silo:
 		Weapons: Debris, Debris2, Debris3, Debris4
 		Pieces: 3, 5
 		Range: 2c0, 5c0
+	RevealOnDeath:
+		Radius: 2c768
 
 light_factory:
 	Inherits: ^Building
 	Buildable:
-		Prerequisites: construction_yard, refinery
+		Prerequisites: refinery
 		Queue: Building
-		BuildPaletteOrder: 70
+		BuildPaletteOrder: 60
 		BuildDuration: 277
 		BuildDurationModifier: 40
+		Description: Produces light vehicles.
 	Selectable:
 		Bounds: 96,64
 	Valued:
 		Cost: 500
 	Tooltip:
 		Name: Light Factory
-		Description: Produces light vehicles
 	Building:
-		Footprint: xxx xx=
-		Dimensions: 3,2
-	Bib:
+		Footprint: xxx xx= ===
+		Dimensions: 3,3
+		LocalCenterOffset: 0,-512,0
+	WithBuildingBib:
 	Health:
 		HP: 3300
+	HitShape:
+		TargetableOffsets: -210,608,0
+		Type: Rectangle
+			TopLeft: -1536, -1024
+			BottomRight: 1536, 1024
 	Armor:
 		Type: light
 	RevealsShroud:
@@ -362,6 +404,7 @@ light_factory:
 	Production:
 		Produces: Vehicle
 	PrimaryBuilding:
+		PrimaryCondition: primary
 	ProductionBar:
 	ProvidesPrerequisite@atreides:
 		Prerequisite: light.atreides
@@ -382,46 +425,54 @@ light_factory:
 		Sequence: idle-top
 	Power:
 		Amount: -125
-	GlobalUpgradable:
+	GrantConditionOnPrerequisite:
 		Prerequisites: upgrade.light
-		Upgrades: stardecoration
+		Condition: stardecoration
 	WithDecoration@upgraded:
 		RequiresSelection: true
 		Image: pips
 		Sequence: tag-upgraded
 		ReferencePoint: Top, Right
 		ZOffset: 256
-		UpgradeTypes: stardecoration
-		UpgradeMinEnabledLevel: 1
+		RequiresCondition: stardecoration
 	WithTextDecoration@primary:
 		RequiresSelection: true
 		Text: PRIMARY
 		ReferencePoint: Top
 		ZOffset: 256
-		UpgradeTypes: primary
-		UpgradeMinEnabledLevel: 1
+		RequiresCondition: primary
 
 heavy_factory:
 	Inherits: ^Building
 	Buildable:
-		Prerequisites: construction_yard, refinery
+		Prerequisites: refinery
 		Queue: Building
-		BuildPaletteOrder: 100
+		BuildPaletteOrder: 90
 		BuildDuration: 648
 		BuildDurationModifier: 40
+		Description: Produces heavy vehicles.
 	Selectable:
 		Bounds: 96,68,0,12
 	Valued:
 		Cost: 1000
 	Tooltip:
 		Name: Heavy Factory
-		Description: Produces heavy vehicles
 	Building:
-		Footprint: _x_ xxx =xx
-		Dimensions: 3,3
-	Bib:
+		Footprint: _x_ xxx =xX ===
+		Dimensions: 3,4
+		LocalCenterOffset: 0,-512,0
+	WithBuildingBib:
 	Health:
 		HP: 3500
+	HitShape:
+		TargetableOffsets: -1155,-704,0, -1365,832,0
+		Type: Rectangle
+			TopLeft: -1536, -512
+			BottomRight: 1536, 1536
+	HitShape@TOP:
+		Type: Rectangle
+			TopLeft: -512, -1536
+			BottomRight: 512, -512
 	Armor:
 		Type: wood
 	RevealsShroud:
@@ -434,6 +485,7 @@ heavy_factory:
 	Production:
 		Produces: Armor
 	PrimaryBuilding:
+		PrimaryCondition: primary
 	ProductionBar:
 	ProvidesPrerequisite@atreides:
 		Prerequisite: heavy.atreides
@@ -463,56 +515,60 @@ heavy_factory:
 	ProvidesPrerequisite@buildingname:
 	SelectionDecorations:
 		VisualBounds: 96,96
-	GlobalUpgradable:
+	GrantConditionOnPrerequisite:
 		Prerequisites: upgrade.heavy
-		Upgrades: stardecoration
+		Condition: stardecoration
 	WithDecoration@upgraded:
 		RequiresSelection: true
 		Image: pips
 		Sequence: tag-upgraded
 		ReferencePoint: Top, Right
 		ZOffset: 256
-		UpgradeTypes: stardecoration
-		UpgradeMinEnabledLevel: 1
+		RequiresCondition: stardecoration
 	WithTextDecoration@primary:
 		RequiresSelection: true
 		Text: PRIMARY
 		ReferencePoint: Top
 		ZOffset: 256
-		UpgradeTypes: primary
-		UpgradeMinEnabledLevel: 1
+		RequiresCondition: primary
 
 outpost:
 	Inherits: ^Building
+	Inherits@IDISABLE: ^DisabledOverlay
 	RequiresPower:
 	CanPowerDown:
 		PowerupSound: EnablePower
 		PowerdownSound: DisablePower
-	DisabledOverlay:
 	Buildable:
-		Prerequisites: construction_yard, barracks, ~techlevel.medium
+		Prerequisites: barracks, ~techlevel.medium
 		Queue: Building
-		BuildPaletteOrder: 50
+		BuildPaletteOrder: 80
 		BuildDuration: 270
 		BuildDurationModifier: 40
+		Description: Provides a radar map of the battlefield.\n  Requires power to operate.
 	Selectable:
 		Bounds: 96,72,0,-8
 	Valued:
 		Cost: 750
 	Tooltip:
 		Name: Outpost
-		Description: Provides a radar map of the battlefield\n  Requires power to operate
 	Building:
-		Footprint: xxx xxx
-		Dimensions: 3,2
-	Bib:
+		Footprint: xxx xxx ===
+		Dimensions: 3,3
+		LocalCenterOffset: 0,-512,0
+	WithBuildingBib:
 	Health:
 		HP: 3500
+	HitShape:
+		Type: Rectangle
+			TopLeft: -1536, -1024
+			BottomRight: 1536, 1024
 	Armor:
 		Type: light
 	RevealsShroud:
 		Range: 4c768
 	ProvidesRadar:
+		RequiresCondition: !disabled
 	RenderSprites:
 		Image: outpost.harkonnen
 		FactionImages:
@@ -522,22 +578,27 @@ outpost:
 			mercenary: outpost.ordos
 	WithIdleOverlay@DISH:
 		Sequence: idle-dish
-		PauseOnLowPower: true
+		PauseOnCondition: disabled
+		RequiresCondition: !severe-damaged
+	GrantConditionOnDamageState@STOPDISH:
+		Condition: severe-damaged
+		ValidDamageState: Medium, Heavy, Critical
 	Power:
 		Amount: -125
 	ProvidesPrerequisite@buildingname:
 
 starport:
 	Inherits: ^Building
+	Inherits@IDISABLE: ^DisabledOverlay
 	Tooltip:
 		Name: Starport
-		Description: Dropzone for quick reinforcements, at a price.\n  Requires power to operate
 	Buildable:
-		Prerequisites: construction_yard, heavy_factory, outpost, ~techlevel.high
+		Prerequisites: heavy_factory, outpost, ~techlevel.high
 		Queue: Building
-		BuildPaletteOrder: 80
+		BuildPaletteOrder: 70
 		BuildDuration: 540
 		BuildDurationModifier: 40
+		Description: Dropzone for quick reinforcements, at a price.
 	Valued:
 		Cost: 1500
 	Building:
@@ -547,6 +608,14 @@ starport:
 		Bounds: 96,64
 	Health:
 		HP: 3500
+	HitShape:
+		Type: Rectangle
+			TopLeft: -1536, -1536
+			BottomRight: 1536, 512
+	HitShape@BOTTOM:
+		Type: Rectangle
+			TopLeft: -512, 512
+			BottomRight: 512, 1536
 	Armor:
 		Type: building
 	RevealsShroud:
@@ -573,11 +642,7 @@ starport:
 		Palette: starportlights
 	ProductionBar:
 	PrimaryBuilding:
-	RequiresPower:
-	CanPowerDown:
-		PowerupSound: EnablePower
-		PowerdownSound: DisablePower
-	DisabledOverlay:
+		PrimaryCondition: primary
 	ProvidesPrerequisite@atreides:
 		Prerequisite: starport.atreides
 		Factions: atreides
@@ -595,8 +660,7 @@ starport:
 		Text: PRIMARY
 		ReferencePoint: Top
 		ZOffset: 256
-		UpgradeTypes: primary
-		UpgradeMinEnabledLevel: 1
+		RequiresCondition: primary
 
 wall:
 	Inherits@1: ^SpriteActor
@@ -604,20 +668,17 @@ wall:
 	HiddenUnderShroud:
 	Buildable:
 		Queue: Building
-		Prerequisites: construction_yard, barracks
-		BuildPaletteOrder: 60
+		Prerequisites: barracks
+		BuildPaletteOrder: 130
 		BuildDuration: 54
 		BuildDurationModifier: 40
-	SoundOnDamageTransition:
-		DamagedSounds:
-		DestroyedSounds: EXPLSML4.WAV
+		Description: Stop units and blocks enemy fire.
 	Valued:
 		Cost: 20
 	CustomSellValue:
 		Value: 0
 	Tooltip:
 		Name: Concrete Wall
-		Description: Stop units and blocks enemy fire.
 	AppearsOnRadar:
 	Building:
 		BuildSounds: CHUNG.WAV
@@ -625,16 +686,14 @@ wall:
 		TerrainTypes: Rock, Concrete
 	Health:
 		HP: 2000
-		Shape: Rectangle
-			TopLeft: -512, -512
-			BottomRight: 512, 512
 	Armor:
-		Type: none
+		Type: wall
 	RevealsShroud:
 		Range: 2c768
 	Crushable:
 		CrushClasses: wall
 	BlocksProjectiles:
+		Height: 512
 	LineBuild:
 		Range: 5
 		NodeTypes: wall, turret
@@ -643,28 +702,37 @@ wall:
 	Targetable:
 		TargetTypes: Ground, Wall
 	WithWallSpriteBody:
-	AutoTargetIgnore:
 	Sellable:
 		SellSounds: CHUNG.WAV
 	Guardable:
+	Explodes:
+		Weapon: WallExplode
+		EmptyWeapon: WallExplode
 	ThrowsShrapnel:
-		Weapons: Debris, Debris3
-		Pieces: 2, 2
-		Range: 2c0, 4c0
+		Weapons: Debris2, Debris3
+		Pieces: 1, 1
+		Range: 1c512, 2c768
+	HitShape:
+		Type: Rectangle
+			TopLeft: -512, -512
+			BottomRight: 512, 512
+	EditorTilesetFilter:
+		Categories: Defense
 
 medium_gun_turret:
 	Inherits: ^Defense
+	Inherits@AUTOTARGET: ^AutoTargetGround
 	Buildable:
 		Queue: Building
-		Prerequisites: construction_yard, barracks
-		BuildPaletteOrder: 90
+		Prerequisites: barracks
+		BuildPaletteOrder: 100
 		BuildDuration: 231
 		BuildDurationModifier: 40
+		Description: Defensive structure.\n  Strong vs Tanks\n  Weak vs Infantry, Aircraft
 	Valued:
 		Cost: 550
 	Tooltip:
 		Name: Gun Turret
-		Description: Defensive structure\n  Strong vs Tanks\n  Weak vs Infantry, Aircraft
 	Building:
 		Adjacent: 4
 		BuildSounds: CHUNG.WAV
@@ -696,17 +764,19 @@ medium_gun_turret:
 
 large_gun_turret:
 	Inherits: ^Defense
+	Inherits@IDISABLE: ^DisabledOverlay
+	Inherits@AUTOTARGET: ^AutoTargetGround
 	Buildable:
 		Queue: Building
-		Prerequisites: construction_yard, outpost, upgrade.conyard, ~techlevel.medium
-		BuildPaletteOrder: 120
+		Prerequisites: outpost, upgrade.conyard, ~techlevel.medium
+		BuildPaletteOrder: 110
 		BuildDuration: 270
 		BuildDurationModifier: 40
+		Description: Defensive structure.\n  Strong vs Infantry, Aircraft\n  Weak vs Tanks\n\n  Requires power to operate.
 	Valued:
 		Cost: 750
 	Tooltip:
 		Name: Rocket Turret
-		Description: Defensive structure\n  Strong vs Infantry, Aircraft\n  Weak vs Tanks\n\n  Requires power to operate
 	Building:
 		Adjacent: 4
 		BuildSounds: CHUNG.WAV
@@ -733,30 +803,39 @@ large_gun_turret:
 	CanPowerDown:
 		PowerupSound: EnablePower
 		PowerdownSound: DisablePower
-	DisabledOverlay:
 	Power:
 		Amount: -60
 	SelectionDecorations:
 		VisualBounds: 32,40,0,-8
+	RevealOnDeath:
+		Radius: 5c768
 
 repair_pad:
 	Inherits: ^Building
 	Buildable:
 		Queue: Building
-		Prerequisites: construction_yard, heavy_factory, upgrade.heavy, ~techlevel.medium
-		BuildPaletteOrder: 130
+		Prerequisites: heavy_factory, upgrade.heavy, ~techlevel.medium
+		BuildPaletteOrder: 150
 		BuildDuration: 324
 		BuildDurationModifier: 40
+		Description: Repairs vehicles.\n Allows construction of MCVs
 	Valued:
 		Cost: 800
 	Tooltip:
 		Name: Repair Pad
-		Description: Repairs vehicles\n Allows construction of MCVs
 	Building:
-		Footprint: =x= =x= ===
+		Footprint: =x= xxx =x=
 		Dimensions: 3,3
 	Health:
 		HP: 3000
+	HitShape:
+		Type: Rectangle
+			TopLeft: -1536, -512
+			BottomRight: 1536, 512
+	HitShape@TOPANDBOTTOM:
+		Type: Rectangle
+			TopLeft: -512, -1536
+			BottomRight: 512, 1536
 	Armor:
 		Type: building
 	RevealsShroud:
@@ -789,29 +868,40 @@ repair_pad:
 high_tech_factory:
 	Inherits: ^Building
 	Buildable:
-		Prerequisites: construction_yard, outpost, ~techlevel.medium
+		Prerequisites: outpost, ~techlevel.medium
 		Queue: Building
-		BuildPaletteOrder: 110
+		BuildPaletteOrder: 140
 		BuildDuration: 405
 		BuildDurationModifier: 40
+		Description: Unlocks advanced technology.
 	Selectable:
 		Bounds: 96,68,0,12
 	Valued:
 		Cost: 1150
 	Tooltip:
 		Name: High Tech Factory
-		Description: Unlocks advanced technology
 	ProductionFromMapEdge:
 		Produces: Aircraft
 	Exit:
 		SpawnOffset: 0,0,728
 		ExitCell: 0,0
 	Building:
-		Footprint: _x_ xxx xxx
-		Dimensions: 3,3
-	Bib:
+		Footprint: _X_ xxx XXX ===
+		Dimensions: 3,4
+		LocalCenterOffset: 0,-512,0
+	WithBuildingBib:
 	Health:
 		HP: 3500
+	HitShape:
+		TargetableOffsets: -1312,0,0, -1312,-1024,0, -1312,1024,0
+		Type: Rectangle
+			TopLeft: -1536, -512
+			BottomRight: 1536, 1536
+	HitShape@TOP:
+		TargetableOffsets: 1280,0,0
+		Type: Rectangle
+			TopLeft: -512, -1536
+			BottomRight: 512, -512
 	Armor:
 		Type: wood
 	RevealsShroud:
@@ -833,49 +923,62 @@ high_tech_factory:
 		Prerequisites: ~techlevel.superweapons, upgrade.hightech
 		ChargeTime: 300
 		SquadSize: 3
+		SquadOffset: -1536, 1024, 0
 		LongDesc: Ornithopters hit the target with bombs
 		UnitType: ornithopter
 		DisplayBeacon: True
 		CameraActor: camera
+		ArrowSequence: arrow
+		CircleSequence: circles
 	WithProductionOverlay@WELDING:
 		Sequence: production-welding
 	Power:
 		Amount: -75
 	SelectionDecorations:
 		VisualBounds: 96,96
-	GlobalUpgradable:
+	GrantConditionOnPrerequisite:
 		Prerequisites: upgrade.hightech
-		Upgrades: stardecoration
+		Condition: stardecoration
 	WithDecoration@upgraded:
 		RequiresSelection: true
 		Image: pips
 		Sequence: tag-upgraded
 		ReferencePoint: Top, Right
 		ZOffset: 256
-		UpgradeTypes: stardecoration
-		UpgradeMinEnabledLevel: 1
+		RequiresCondition: stardecoration
 
 research_centre:
 	Inherits: ^Building
 	Buildable:
 		Queue: Building
-		Prerequisites: construction_yard, outpost, heavy_factory, upgrade.heavy, ~techlevel.high
-		BuildPaletteOrder: 140
+		Prerequisites: outpost, heavy_factory, upgrade.heavy, ~techlevel.high
+		BuildPaletteOrder: 160
 		BuildDuration: 270
 		BuildDurationModifier: 40
+		Description: Unlocks advanced tanks.
 	Selectable:
 		Bounds: 96,64,0,16
 	Valued:
 		Cost: 1000
 	Tooltip:
-		Name: Ix Lab
-		Description: Unlocks experimental tanks
+		Name: IX Research Center
 	Building:
-		Footprint: _x_ xxx xxx
-		Dimensions: 3,3
-	Bib:
+		Footprint: _X_ xxx XXX ===
+		Dimensions: 3,4
+		LocalCenterOffset: 0,-512,0
+	WithBuildingBib:
 	Health:
 		HP: 2500
+	HitShape:
+		TargetableOffsets: -1574,-158,0, -1050,-1024,0, -1155,960,0
+		Type: Rectangle
+			TopLeft: -1536, -512
+			BottomRight: 1536, 1536
+	HitShape@TOP:
+		TargetableOffsets: 1312,0,0
+		Type: Rectangle
+			TopLeft: -512, -1536
+			BottomRight: 512, -512
 	Armor:
 		Type: wood
 	RevealsShroud:
@@ -897,26 +1000,39 @@ research_centre:
 
 palace:
 	Inherits: ^Building
+	Inherits@IDISABLE: ^DisabledOverlay
 	Buildable:
-		Prerequisites: construction_yard, research_centre, ~techlevel.high
+		Prerequisites: research_centre, ~techlevel.high
 		Queue: Building
-		BuildPaletteOrder: 150
+		BuildPaletteOrder: 170
 		BuildDuration: 810
 		BuildDurationModifier: 40
+		Description: Unlocks elite infantry and weapons.
 	Selectable:
 		Bounds: 96,96
 	Valued:
 		Cost: 1600
 	Tooltip:
 		Name: Palace
-		Description: Unlocks elite infantry
 	Building:
 		Footprint: xx= xxx =xx
 		Dimensions: 3,3
-	Bib:
+	WithBuildingBib:
 		HasMinibib: True
 	Health:
 		HP: 4000
+	HitShape:
+		Type: Rectangle
+			TopLeft: -1536, -512
+			BottomRight: 1536, 512
+	HitShape@TOP:
+		Type: Rectangle
+			TopLeft: -1536, -1536
+			BottomRight: 512, -512
+	HitShape@BOTTOM:
+		Type: Rectangle
+			TopLeft: -512, 512
+			BottomRight: 1536, 1536
 	Armor:
 		Type: wood
 	RevealsShroud:
@@ -943,6 +1059,7 @@ palace:
 	NukePower:
 		Cursor: nuke
 		Icon: deathhand
+		PauseOnCondition: disabled
 		Prerequisites: ~techlevel.superweapons, ~palace.nuke
 		ChargeTime: 300
 		Description: Death Hand
@@ -954,12 +1071,15 @@ palace:
 		SpawnOffset: -512,1c171,0
 		DisplayBeacon: True
 		DisplayRadarPing: True
-		CameraActor: camera
+		CameraRange: 10c0
 		ActivationSequence:
+		ArrowSequence: arrow
+		CircleSequence: circles
 	ProduceActorPower@fremen:
 		Description: Recruit Fremen
-		LongDesc: Elite sniper infantry unit                       \n  Strong vs Infantry\n  Weak vs Vehicles\n  Special Ability: Invisibility
+		LongDesc: Elite infantry unit armed with assault rifles and rockets\n  Strong vs Infantry, Vehicles\n  Weak vs Artillery\n  Special Ability: Invisibility
 		Icon: fremen
+		PauseOnCondition: disabled
 		Prerequisites: ~techlevel.superweapons, ~palace.fremen
 		Actors: fremen, fremen
 		Type: Palace
@@ -969,8 +1089,9 @@ palace:
 		OrderName: ProduceActorPower.Fremen
 	ProduceActorPower@saboteur:
 		Description: Recruit Saboteur
-		LongDesc: Sneaky infantry, armed with explosives           \n  Strong vs Buildings\n  Weak vs Everything\n  Special Ability: destroy buildings
+		LongDesc: Sneaky infantry, armed with explosives\n  Strong vs Buildings\n  Weak vs Everything\n  Special Ability: destroy buildings
 		Icon: saboteur
+		PauseOnCondition: disabled
 		Prerequisites: ~techlevel.superweapons, ~palace.saboteur
 		Actors: saboteur
 		Type: Palace
@@ -992,7 +1113,6 @@ palace:
 	CanPowerDown:
 		PowerupSound: EnablePower
 		PowerdownSound: DisablePower
-	DisabledOverlay:
 	RequiresPower:
 	SupportPowerChargeBar:
 	ProvidesPrerequisite@buildingname:

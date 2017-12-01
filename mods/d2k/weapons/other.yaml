@@ -15,10 +15,13 @@ Sound:
 	Warhead@1Dam: SpreadDamage
 		Range: 0, 32
 		Falloff: 100, 100
-		Damage: 150
+		Damage: 86
 		AffectsParent: false
 		ValidStances: Neutral, Enemy
 		Versus:
+			none: 200
+			light: 110
+			wood: 110
 			wall: 50
 			building: 60
 			heavy: 60
@@ -28,12 +31,14 @@ Sound:
 		DamageTypes: Prone50Percent, TriggerProne, SoundDeath
 	Warhead@2Dam: SpreadDamage
 		Range: 0, 32
-		Falloff: 50, 50 # Only does half damage to friendly units
-		Damage: 150
-		InvalidTargets: Sonictank # Does not affect friendly sonic tanks at all
+		Falloff: 100, 100
+		Damage: 43 # Only does half damage to friendly units
 		AffectsParent: false
 		ValidStances: Ally
 		Versus:
+			none: 200
+			light: 110
+			wood: 110
 			wall: 50
 			building: 60
 			heavy: 60
@@ -42,41 +47,27 @@ Sound:
 			harvester: 50
 		DamageTypes: Prone50Percent, TriggerProne, SoundDeath
 
-Heal:
-	ReloadDelay: 160
-	Range: 4c0
-	Report:
-	ValidTargets: Infantry
-	Projectile: Bullet
-		Speed: 1c256
-	Warhead@1Dam: SpreadDamage
-		Spread: 160
-		Falloff: 100, 100, 0
-		Damage: -200
-		ValidTargets: Infantry
-		DebugOverlayColor: 00FF00
-
 WormJaw:
 	ReloadDelay: 10
 	InvalidTargets: Structure, Infantry
 	Range: 1c512
-	Warhead@1Dam: SpreadDamage
+	Warhead@1Dam: TargetDamage # HACK: The warhead is needed for targeting
 		InvalidTargets: Structure, Infantry
-		Spread: 768
-		Falloff: 100, 100, 0
-		Damage: 10000
 
 OrniBomb:
 	ReloadDelay: 25
 	Burst: 5
-	BurstDelay: 3
+	BurstDelay: 6
 	Range: 3c0
 	Projectile: GravityBomb
 		Image: BOMBS
+		Velocity: 0, 0, -64
+		Acceleration: 0, 0, 0
+		Shadow: true
 	Warhead@1Dam: SpreadDamage
 		Spread: 320
 		Falloff: 100, 60, 30, 15, 0
-		Damage: 1000 #400 in original, reduce when bombers can do multiple passes
+		Damage: 750 #400 in original, reduce when bombers can do multiple passes
 		Versus:
 			none: 90
 			wall: 50
@@ -89,11 +80,12 @@ OrniBomb:
 			harvester: 60
 		DamageTypes: Prone50Percent, TriggerProne, SmallExplosionDeath
 	Warhead@2Smu: LeaveSmudge
-		SmudgeType: Crater
+		SmudgeType: SandCrater, RockCrater
 		InvalidTargets: Vehicle, Structure
 	Warhead@3Eff: CreateEffect
 		Explosions: large_explosion
-		ImpactSounds: NAPALM1.WAV
+		ImpactSounds: EXPLSML4.WAV
+		VictimScanRadius: 0
 
 Crush:
 	Warhead@1Dam: SpreadDamage
@@ -108,6 +100,7 @@ Demolish:
 	Warhead@2Eff: CreateEffect
 		Explosions: building
 		ImpactSounds: EXPLLG2.WAV
+		VictimScanRadius: 0
 
 Atomic:
 	Warhead@1Dam: SpreadDamage
@@ -128,27 +121,15 @@ Atomic:
 	Warhead@2Eff: CreateEffect
 		Explosions: nuke
 		ImpactSounds: EXPLLG2.WAV
+		VictimScanRadius: 0
 
 CrateNuke:
+	Inherits: Atomic
 	Warhead@1Dam: SpreadDamage
 		Spread: 320
 		Falloff: 100, 60, 30, 15, 0
 		Damage: 500
-		Versus:
-			none: 90
-			wall: 50
-			building: 75
-			wood: 60
-			light: 60
-			heavy: 60
-			invulnerable: 0
-			cy: 25
-			harvester: 60
 		AffectsParent: true
-		DamageTypes: Prone50Percent, TriggerProne, SoundDeath
-	Warhead@2Eff: CreateEffect
-		Explosions: nuke
-		ImpactSounds: EXPLLG2.WAV
 
 CrateExplosion:
 	Warhead@1Dam: SpreadDamage
@@ -170,29 +151,44 @@ CrateExplosion:
 	Warhead@2Eff: CreateEffect
 		Explosions: large_explosion
 		ImpactSounds: EXPLSML4.WAV
+		VictimScanRadius: 0
 
 UnitExplodeSmall:
 	Warhead@1Eff: CreateEffect
 		Explosions: self_destruct
 		ImpactSounds: EXPLSML1.WAV
+		VictimScanRadius: 0
 
 UnitExplodeMed:
 	Warhead@1Eff: CreateEffect
 		Explosions: building
 		ImpactSounds: EXPLSML2.WAV
+		VictimScanRadius: 0
 
 UnitExplodeLarge:
 	Warhead@1Eff: CreateEffect
 		Explosions: large_explosion
 		ImpactSounds: EXPLLG2.WAV
+		VictimScanRadius: 0
+
+BuildingExplode:
+	Warhead@1Eff: CreateEffect
+		Explosions: building, self_destruct, large_explosion
+		VictimScanRadius: 0
+
+WallExplode:
+	Warhead@1Eff: CreateEffect
+		Explosions: wall_explosion
+		ImpactSounds: EXPLHG1.WAV
+		VictimScanRadius: 0
 
 grenade:
 	ReloadDelay: 50
 	Range: 4c0
 	Projectile: Bullet
-		Speed: 256
+		Speed: 160
 		Blockable: false
-		Angle: 75
+		LaunchAngle: 128
 		Inaccuracy: 416
 		Image: grenade
 		Shadow: true
@@ -214,7 +210,8 @@ grenade:
 		InvalidTargets: Vehicle, Structure
 	Warhead@3Eff: CreateEffect
 		Explosions: med_explosion
-		ImpactSounds: EXPLLG5.WAV
+		ImpactSounds: EXPLMD2.WAV
+		VictimScanRadius: 0
 
 GrenDeath:
 	Warhead@1Dam: SpreadDamage
@@ -235,6 +232,7 @@ GrenDeath:
 	Warhead@3Eff: CreateEffect
 		Explosions: building
 		ImpactSounds: EXPLSML4.WAV
+		VictimScanRadius: 0
 
 SardDeath:
 	Warhead@1Dam: SpreadDamage
@@ -256,12 +254,13 @@ SardDeath:
 	Warhead@3Eff: CreateEffect
 		Explosions: small_napalm
 		ImpactSounds: EXPLSML2.WAV
+		VictimScanRadius: 0
 
 SpiceExplosion:
 	Projectile: Bullet
 		Speed: 50, 75
 		Blockable: false
-		Angle: 60, 90
+		LaunchAngle: 60, 90
 		TrailImage: large_trail
 		Image: 120mm
 	Warhead@1Dam: SpreadDamage
@@ -285,14 +284,12 @@ SpiceExplosion:
 		Size: 1
 	Warhead@3Eff: CreateEffect
 		Explosions: med_explosion
+		VictimScanRadius: 0
 
 BloomExplosion:
 	Report: EXPLMD1.WAV
 	Range: 0c8
-	Projectile: Bullet
-		Speed: 1c0
-		Blockable: false
-		Image: null
+	Projectile: InstantHit
 	Warhead@1Dam: SpreadDamage
 		Spread: 320
 		Falloff: 100, 60, 30, 15, 0
@@ -309,12 +306,3 @@ BloomExplosion:
 			harvester: 25
 		DamageTypes: Prone50Percent, TriggerProne, ExplosionDeath
 		AffectsParent: true
-
-BloomSpawn:
-	Range: 0c1
-	Projectile: Bullet
-		Speed: 1c0
-		Blockable: false
-		Image: null
-	Warhead@1Eff: CreateEffect
-		Explosions: bloomspawn

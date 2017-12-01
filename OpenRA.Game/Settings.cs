@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -51,8 +51,6 @@ namespace OpenRA
 		[Desc("Locks the game with a password.")]
 		public string Password = "";
 
-		public string MasterServer = "http://master.openra.net/";
-
 		[Desc("Allow users to enable NAT discovery for external IP detection and automatic port forwarding.")]
 		public bool DiscoverNatDevices = false;
 
@@ -67,9 +65,6 @@ namespace OpenRA
 
 		[Desc("Takes a comma separated list of IP addresses that are not allowed to join.")]
 		public string[] Ban = { };
-
-		[Desc("Value in milliseconds when to terminate the game. Needs to be at least 10000 (10 s) to enable the timer.")]
-		public int TimeOut = 0;
 
 		[Desc("For dedicated servers only, controls whether a game can be started with just one human player in the lobby.")]
 		public bool EnableSingleplayer = false;
@@ -95,6 +90,7 @@ namespace OpenRA
 		public bool SanityCheckUnsyncedCode = false;
 		public int Samples = 25;
 		public bool IgnoreVersionMismatch = false;
+		public bool StrictActivityChecking = false;
 		public bool SendSystemInformation = true;
 		public int SystemInformationVersionPrompt = 0;
 		public string UUID = System.Guid.NewGuid().ToString();
@@ -121,6 +117,9 @@ namespace OpenRA
 
 		[Desc("At which frames per second to cap the framerate.")]
 		public int MaxFramerate = 60;
+
+		[Desc("Disable high resolution DPI scaling on Windows operating systems.")]
+		public bool DisableWindowsDPIScaling = true;
 
 		public int BatchSize = 8192;
 		public int SheetSize = 2048;
@@ -155,15 +154,11 @@ namespace OpenRA
 
 	public class GameSettings
 	{
-		[Desc("Load a specific mod on startup. Shipped ones include: ra, cnc and d2k")]
-		public string Mod = "modchooser";
-		public string PreviousMod = "ra";
-
 		public string Platform = "Default";
 
-		public bool ShowShellmap = true;
-
 		public bool ViewportEdgeScroll = true;
+		public int ViewportEdgeScrollMargin = 5;
+
 		public bool LockMouseWindow = false;
 		public MouseScrollType MiddleMouseScroll = MouseScrollType.Standard;
 		public MouseScrollType RightMouseScroll = MouseScrollType.Disabled;
@@ -179,13 +174,11 @@ namespace OpenRA
 		public bool DrawTargetLine = true;
 
 		public bool AllowDownloading = true;
-		public string MapRepository = "http://resource.openra.net/map/";
 
 		public bool AllowZoom = true;
 		public Modifiers ZoomModifier = Modifiers.Ctrl;
 
 		public bool FetchNews = true;
-		public string NewsUrl = "http://master.openra.net/gamenews";
 
 		public MPGameFilters MPGameFilters = MPGameFilters.Waiting | MPGameFilters.Empty | MPGameFilters.Protected | MPGameFilters.Started;
 	}
@@ -232,7 +225,10 @@ namespace OpenRA
 		public Hotkey StopKey = new Hotkey(Keycode.S, Modifiers.None);
 		public Hotkey ScatterKey = new Hotkey(Keycode.X, Modifiers.Ctrl);
 		public Hotkey DeployKey = new Hotkey(Keycode.F, Modifiers.None);
-		public Hotkey StanceCycleKey = new Hotkey(Keycode.Z, Modifiers.Ctrl);
+		public Hotkey StanceHoldFireKey = new Hotkey(Keycode.F, Modifiers.Alt);
+		public Hotkey StanceReturnFireKey = new Hotkey(Keycode.D, Modifiers.Alt);
+		public Hotkey StanceDefendKey = new Hotkey(Keycode.S, Modifiers.Alt);
+		public Hotkey StanceAttackAnythingKey = new Hotkey(Keycode.A, Modifiers.Alt);
 		public Hotkey GuardKey = new Hotkey(Keycode.D, Modifiers.None);
 
 		public Hotkey ObserverCombinedView = new Hotkey(Keycode.MINUS, Modifiers.None);
@@ -334,7 +330,6 @@ namespace OpenRA
 		public string Hostname = "irc.openra.net";
 		public int Port = 6667;
 		public string Channel = "lobby";
-		public string Nickname = "Newbie";
 		public string QuitMessage = "Battle control terminated!";
 		public string TimestampFormat = "HH:mm";
 		public bool ConnectAutomatically = false;
@@ -342,18 +337,23 @@ namespace OpenRA
 
 	public class Settings
 	{
-		string settingsFile;
+		readonly string settingsFile;
 
-		public PlayerSettings Player = new PlayerSettings();
-		public GameSettings Game = new GameSettings();
-		public SoundSettings Sound = new SoundSettings();
-		public GraphicSettings Graphics = new GraphicSettings();
-		public ServerSettings Server = new ServerSettings();
-		public DebugSettings Debug = new DebugSettings();
-		public KeySettings Keys = new KeySettings();
-		public ChatSettings Chat = new ChatSettings();
+		public readonly PlayerSettings Player = new PlayerSettings();
+		public readonly GameSettings Game = new GameSettings();
+		public readonly SoundSettings Sound = new SoundSettings();
+		public readonly GraphicSettings Graphics = new GraphicSettings();
+		public readonly ServerSettings Server = new ServerSettings();
+		public readonly DebugSettings Debug = new DebugSettings();
+		public readonly KeySettings Keys = new KeySettings();
+		public readonly ChatSettings Chat = new ChatSettings();
 
-		public Dictionary<string, object> Sections;
+		public readonly Dictionary<string, object> Sections;
+
+		// A direct clone of the file loaded from disk.
+		// Any changed settings will be merged over this on save,
+		// allowing us to persist any unknown configuration keys
+		readonly List<MiniYamlNode> yamlCache = new List<MiniYamlNode>();
 
 		public Settings(string file, Arguments args)
 		{
@@ -379,11 +379,13 @@ namespace OpenRA
 
 				if (File.Exists(settingsFile))
 				{
-					var yaml = MiniYaml.DictFromFile(settingsFile);
-
-					foreach (var kv in Sections)
-						if (yaml.ContainsKey(kv.Key))
-							LoadSectionYaml(yaml[kv.Key], kv.Value);
+					yamlCache = MiniYaml.FromFile(settingsFile);
+					foreach (var yamlSection in yamlCache)
+					{
+						object settingsSection;
+						if (Sections.TryGetValue(yamlSection.Key, out settingsSection))
+							LoadSectionYaml(yamlSection.Value, settingsSection);
+					}
 				}
 
 				// Override with commandline args
@@ -401,11 +403,39 @@ namespace OpenRA
 
 		public void Save()
 		{
-			var root = new List<MiniYamlNode>();
 			foreach (var kv in Sections)
-				root.Add(new MiniYamlNode(kv.Key, FieldSaver.SaveDifferences(kv.Value, Activator.CreateInstance(kv.Value.GetType()))));
+			{
+				var sectionYaml = yamlCache.FirstOrDefault(x => x.Key == kv.Key);
+				if (sectionYaml == null)
+				{
+					sectionYaml = new MiniYamlNode(kv.Key, new MiniYaml(""));
+					yamlCache.Add(sectionYaml);
+				}
 
-			root.WriteToFile(settingsFile);
+				var defaultValues = Activator.CreateInstance(kv.Value.GetType());
+				var fields = FieldLoader.GetTypeLoadInfo(kv.Value.GetType());
+				foreach (var fli in fields)
+				{
+					var serialized = FieldSaver.FormatValue(kv.Value, fli.Field);
+					var defaultSerialized = FieldSaver.FormatValue(defaultValues, fli.Field);
+
+					// Fields with their default value are not saved in the settings yaml
+					// Make sure that we erase any previously defined custom values
+					if (serialized == defaultSerialized)
+						sectionYaml.Value.Nodes.RemoveAll(n => n.Key == fli.YamlName);
+					else
+					{
+						// Update or add the custom value
+						var fieldYaml = sectionYaml.Value.Nodes.FirstOrDefault(n => n.Key == fli.YamlName);
+						if (fieldYaml != null)
+							fieldYaml.Value.Value = serialized;
+						else
+							sectionYaml.Value.Nodes.Add(new MiniYamlNode(fli.YamlName, new MiniYaml(serialized)));
+					}
+				}
+			}
+
+			yamlCache.WriteToFile(settingsFile);
 		}
 
 		static string SanitizedName(string dirty)

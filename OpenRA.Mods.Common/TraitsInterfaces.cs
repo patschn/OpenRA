@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -19,6 +19,8 @@ using OpenRA.Traits;
 
 namespace OpenRA.Mods.Common.Traits
 {
+	public enum VisibilityType { Footprint, CenterPosition, GroundPosition }
+
 	public enum AttackDelayType { Preparation, Attack }
 
 	public interface IQuantizeBodyOrientationInfo : ITraitInfo
@@ -26,14 +28,45 @@ namespace OpenRA.Mods.Common.Traits
 		int QuantizedBodyFacings(ActorInfo ai, SequenceProvider sequenceProvider, string race);
 	}
 
-	public interface INotifyResourceClaimLost
-	{
-		void OnNotifyResourceClaimLost(Actor self, ResourceClaim claim, Actor claimer);
-	}
-
 	public interface IPlaceBuildingDecorationInfo : ITraitInfo
 	{
 		IEnumerable<IRenderable> Render(WorldRenderer wr, World w, ActorInfo ai, WPos centerPosition);
+	}
+
+	[RequireExplicitImplementation]
+	public interface IBlocksProjectiles
+	{
+		WDist BlockingHeight { get; }
+	}
+
+	[RequireExplicitImplementation]
+	public interface IBlocksProjectilesInfo : ITraitInfoInterface { }
+
+	[RequireExplicitImplementation]
+	public interface INotifySold
+	{
+		void Selling(Actor self);
+		void Sold(Actor self);
+	}
+
+	public interface IDemolishableInfo : ITraitInfoInterface { bool IsValidTarget(ActorInfo actorInfo, Actor saboteur); }
+	public interface IDemolishable
+	{
+		void Demolish(Actor self, Actor saboteur);
+		bool IsValidTarget(Actor self, Actor saboteur);
+	}
+
+	[RequireExplicitImplementation]
+	public interface ICrushable
+	{
+		bool CrushableBy(Actor self, Actor crusher, HashSet<string> crushClasses);
+	}
+
+	[RequireExplicitImplementation]
+	public interface INotifyCrushed
+	{
+		void OnCrush(Actor self, Actor crusher, HashSet<string> crushClasses);
+		void WarnCrush(Actor self, Actor crusher, HashSet<string> crushClasses);
 	}
 
 	[RequireExplicitImplementation]
@@ -43,22 +76,57 @@ namespace OpenRA.Mods.Common.Traits
 		void PreparingAttack(Actor self, Target target, Armament a, Barrel barrel);
 	}
 
+	[RequireExplicitImplementation]
+	public interface INotifyBuildComplete { void BuildingComplete(Actor self); }
+
+	[RequireExplicitImplementation]
+	public interface INotifyDamageStateChanged { void DamageStateChanged(Actor self, AttackInfo e); }
+
+	public interface INotifyBuildingPlaced { void BuildingPlaced(Actor self); }
+	public interface INotifyRepair { void Repairing(Actor self, Actor target); }
 	public interface INotifyBurstComplete { void FiredBurst(Actor self, Target target, Armament a); }
-	public interface INotifyCharging { void Charging(Actor self, Target target); }
 	public interface INotifyChat { bool OnChat(string from, string message); }
-	public interface INotifyParachuteLanded { void OnLanded(Actor ignore); }
+	public interface INotifyProduction { void UnitProduced(Actor self, Actor other, CPos exit); }
+	public interface INotifyOtherProduction { void UnitProducedByOther(Actor self, Actor producer, Actor produced); }
+	public interface INotifyDelivery { void IncomingDelivery(Actor self); void Delivered(Actor self); }
+	public interface INotifyDocking { void Docked(Actor self, Actor harvester); void Undocked(Actor self, Actor harvester); }
+	public interface INotifyParachute { void OnParachute(Actor self); void OnLanded(Actor self, Actor ignore); }
+	public interface INotifyCapture { void OnCapture(Actor self, Actor captor, Player oldOwner, Player newOwner); }
+	public interface INotifyDiscovered { void OnDiscovered(Actor self, Player discoverer, bool playNotification); }
 	public interface IRenderActorPreviewInfo : ITraitInfo { IEnumerable<IActorPreview> RenderPreview(ActorPreviewInitializer init); }
 	public interface ICruiseAltitudeInfo : ITraitInfo { WDist GetCruiseAltitude(); }
 
-	public interface IUpgradable
+	[RequireExplicitImplementation]
+	public interface INotifyInfiltrated { void Infiltrated(Actor self, Actor infiltrator); }
+
+	[RequireExplicitImplementation]
+	public interface INotifyBlockingMove { void OnNotifyBlockingMove(Actor self, Actor blocking); }
+
+	[RequireExplicitImplementation]
+	public interface INotifyPassengerEntered { void OnPassengerEntered(Actor self, Actor passenger); }
+
+	[RequireExplicitImplementation]
+	public interface INotifyPassengerExited { void OnPassengerExited(Actor self, Actor passenger); }
+
+	[RequireExplicitImplementation]
+	public interface IObservesVariablesInfo : ITraitInfo { }
+
+	public delegate void VariableObserverNotifier(Actor self, IReadOnlyDictionary<string, int> variables);
+	public struct VariableObserver
 	{
-		IEnumerable<string> UpgradeTypes { get; }
-		bool AcceptsUpgradeLevel(Actor self, string type, int level);
-		void UpgradeLevelChanged(Actor self, string type, int oldLevel, int newLevel);
+		public VariableObserverNotifier Notifier;
+		public IEnumerable<string> Variables;
+		public VariableObserver(VariableObserverNotifier notifier, IEnumerable<string> variables)
+		{
+			Notifier = notifier;
+			Variables = variables;
+		}
 	}
 
-	// Implement to construct before UpgradeManager
-	public interface IUpgradableInfo : ITraitInfo { }
+	public interface IObservesVariables
+	{
+		IEnumerable<VariableObserver> GetVariableObservers();
+	}
 
 	public interface INotifyHarvesterAction
 	{
@@ -92,7 +160,24 @@ namespace OpenRA.Mods.Common.Traits
 		bool IsOverlayActive(ActorInfo ai);
 	}
 
-	public interface INotifyTransform { void BeforeTransform(Actor self); void OnTransform(Actor self); void AfterTransform(Actor toActor); }
+	public interface INotifyTransform
+	{
+		void BeforeTransform(Actor self);
+		void OnTransform(Actor self);
+		void AfterTransform(Actor toActor);
+	}
+
+	public interface INotifyDeployComplete
+	{
+		void FinishedDeploy(Actor self);
+		void FinishedUndeploy(Actor self);
+	}
+
+	public interface INotifyDeployTriggered
+	{
+		void Deploy(Actor self, bool skipMakeAnim);
+		void Undeploy(Actor self, bool skipMakeAnim);
+	}
 
 	public interface IAcceptResourcesInfo : ITraitInfo { }
 	public interface IAcceptResources
@@ -142,4 +227,73 @@ namespace OpenRA.Mods.Common.Traits
 
 	[RequireExplicitImplementation]
 	public interface INotifyRearm { void Rearming(Actor host, Actor other); }
+<<<<<<< HEAD
+=======
+
+	[RequireExplicitImplementation]
+	public interface IRenderInfantrySequenceModifier
+	{
+		bool IsModifyingSequence { get; }
+		string SequencePrefix { get; }
+	}
+
+	[RequireExplicitImplementation]
+	public interface IDamageModifier { int GetDamageModifier(Actor attacker, Damage damage); }
+
+	[RequireExplicitImplementation]
+	public interface ISpeedModifier { int GetSpeedModifier(); }
+
+	[RequireExplicitImplementation]
+	public interface IFirepowerModifier { int GetFirepowerModifier(); }
+
+	[RequireExplicitImplementation]
+	public interface IReloadModifier { int GetReloadModifier(); }
+
+	[RequireExplicitImplementation]
+	public interface IInaccuracyModifier { int GetInaccuracyModifier(); }
+
+	[RequireExplicitImplementation]
+	public interface IRangeModifier { int GetRangeModifier(); }
+
+	[RequireExplicitImplementation]
+	public interface IRangeModifierInfo : ITraitInfoInterface { int GetRangeModifierDefault(); }
+
+	[RequireExplicitImplementation]
+	public interface IPowerModifier { int GetPowerModifier(); }
+
+	[RequireExplicitImplementation]
+	public interface IGivesExperienceModifier { int GetGivesExperienceModifier(); }
+
+	[RequireExplicitImplementation]
+	public interface IGainsExperienceModifier { int GetGainsExperienceModifier(); }
+
+	[RequireExplicitImplementation]
+	public interface ICustomMovementLayer
+	{
+		byte Index { get; }
+		bool InteractsWithDefaultLayer { get; }
+
+		bool EnabledForActor(ActorInfo a, MobileInfo mi);
+		int EntryMovementCost(ActorInfo a, MobileInfo mi, CPos cell);
+		int ExitMovementCost(ActorInfo a, MobileInfo mi, CPos cell);
+
+		byte GetTerrainIndex(CPos cell);
+		WPos CenterOfCell(CPos cell);
+	}
+
+	// For traits that want to be exposed to the "Deploy" UI button / hotkey
+	[RequireExplicitImplementation]
+	public interface IIssueDeployOrder
+	{
+		Order IssueDeployOrder(Actor self);
+	}
+
+	public enum ActorPreviewType { PlaceBuilding, ColorPicker, MapEditorSidebar }
+
+	[RequireExplicitImplementation]
+	public interface IActorPreviewInitInfo : ITraitInfo
+	{
+		IEnumerable<object> ActorPreviewInits(ActorInfo ai, ActorPreviewType type);
+	}
+>>>>>>> upstream/master
 }

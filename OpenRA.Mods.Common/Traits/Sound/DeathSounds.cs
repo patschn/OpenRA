@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -16,7 +16,7 @@ using OpenRA.Traits;
 namespace OpenRA.Mods.Common.Traits.Sound
 {
 	[Desc("Sounds to play when killed.")]
-	public class DeathSoundsInfo : ITraitInfo
+	public class DeathSoundsInfo : ConditionalTraitInfo
 	{
 		[Desc("Death notification voice.")]
 		[VoiceReference] public readonly string Voice = "Die";
@@ -28,19 +28,21 @@ namespace OpenRA.Mods.Common.Traits.Sound
 			"If empty, this will be used as the default sound for all death types.")]
 		public readonly HashSet<string> DeathTypes = new HashSet<string>();
 
-		public object Create(ActorInitializer init) { return new DeathSounds(this); }
+		public override object Create(ActorInitializer init) { return new DeathSounds(this); }
 	}
 
-	public class DeathSounds : INotifyKilled
+	public class DeathSounds : ConditionalTrait<DeathSoundsInfo>, INotifyKilled
 	{
-		readonly DeathSoundsInfo info;
-
-		public DeathSounds(DeathSoundsInfo info) { this.info = info; }
+		public DeathSounds(DeathSoundsInfo info)
+			: base(info) { }
 
 		public void Killed(Actor self, AttackInfo e)
 		{
-			if (info.DeathTypes.Count == 0 || e.Damage.DamageTypes.Overlaps(info.DeathTypes))
-				self.PlayVoiceLocal(info.Voice, info.VolumeMultiplier);
+			if (IsTraitDisabled)
+				return;
+
+			if (Info.DeathTypes.Count == 0 || e.Damage.DamageTypes.Overlaps(Info.DeathTypes))
+				self.PlayVoiceLocal(Info.Voice, Info.VolumeMultiplier);
 		}
 	}
 }

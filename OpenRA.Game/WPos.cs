@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -65,8 +65,10 @@ namespace OpenRA
 
 			// Add an additional quadratic variation to height
 			// Uses decimal to avoid integer overflow
-			var offset = (int)((decimal)(b - a).Length * pitch.Tan() * mul * (div - mul) / (1024 * div * div));
-			return new WPos(ret.X, ret.Y, ret.Z + offset);
+			var offset = (decimal)(b - a).Length * pitch.Tan() * mul * (div - mul) / (1024 * div * div);
+			var clampedOffset = (int)(offset + (decimal)ret.Z).Clamp<decimal>((decimal)int.MinValue, (decimal)int.MaxValue);
+
+			return new WPos(ret.X, ret.Y, clampedOffset);
 		}
 
 		public override int GetHashCode() { return X.GetHashCode() ^ Y.GetHashCode() ^ Z.GetHashCode(); }
@@ -93,7 +95,7 @@ namespace OpenRA
 			WPos a;
 			var rightType = right.WrappedClrType();
 			if (!left.TryGetClrValue(out a))
-				throw new LuaException("Attempted to call WPos.Subtract(WPos, WVec) with invalid arguments ({0}, {1})".F(left.WrappedClrType().Name, rightType));
+				throw new LuaException("Attempted to call WPos.Subtract(WPos, (WPos|WVec)) with invalid arguments ({0}, {1})".F(left.WrappedClrType().Name, rightType.Name));
 
 			if (rightType == typeof(WPos))
 			{
@@ -108,7 +110,7 @@ namespace OpenRA
 				return new LuaCustomClrObject(a - b);
 			}
 
-			throw new LuaException("Attempted to call WPos.Subtract(WPos, WVec) with invalid arguments ({0}, {1})".F(left.WrappedClrType().Name, rightType));
+			throw new LuaException("Attempted to call WPos.Subtract(WPos, (WPos|WVec)) with invalid arguments ({0}, {1})".F(left.WrappedClrType().Name, rightType.Name));
 		}
 
 		public LuaValue Equals(LuaRuntime runtime, LuaValue left, LuaValue right)

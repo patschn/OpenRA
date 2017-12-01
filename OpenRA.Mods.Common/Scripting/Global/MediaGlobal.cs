@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -52,7 +52,8 @@ namespace OpenRA.Mods.Common.Scripting
 		[Desc("Play a sound file")]
 		public void PlaySound(string file)
 		{
-			Game.Sound.Play(file);
+			// TODO: Investigate how scripts use this function, and think about exposing the UI vs World distinction if needed
+			Game.Sound.Play(SoundType.World, file);
 		}
 
 		[Desc("Play track defined in music.yaml or map.yaml, or keep track empty for playing a random song.")]

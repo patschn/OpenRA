@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -231,11 +231,6 @@ namespace OpenRA
 			return ret;
 		}
 
-		public static Dictionary<string, MiniYaml> DictFromFile(string path)
-		{
-			return FromFile(path).ToDictionary(x => x.Key, x => x.Value);
-		}
-
 		public static Dictionary<string, MiniYaml> DictFromStream(Stream stream, string fileName = "<no filename available>")
 		{
 			return FromStream(stream, fileName).ToDictionary(x => x.Key, x => x.Value);
@@ -302,7 +297,7 @@ namespace OpenRA
 
 			foreach (var n in node.Nodes)
 			{
-				if (n.Key == "Inherits" || n.Key.StartsWith("Inherits@"))
+				if (n.Key == "Inherits" || n.Key.StartsWith("Inherits@", StringComparison.Ordinal))
 				{
 					MiniYaml parent;
 					if (!tree.TryGetValue(n.Value.Value, out parent))
@@ -317,7 +312,7 @@ namespace OpenRA
 					foreach (var r in ResolveInherits(n.Key, parent, tree, inherited))
 						MergeIntoResolved(r, resolved, tree, inherited);
 				}
-				else if (n.Key.StartsWith("-"))
+				else if (n.Key.StartsWith("-", StringComparison.Ordinal))
 				{
 					var removed = n.Key.Substring(1);
 					if (resolved.RemoveAll(r => r.Key == removed) == 0)

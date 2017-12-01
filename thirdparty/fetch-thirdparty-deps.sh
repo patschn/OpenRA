@@ -17,7 +17,7 @@ cd "${download_dir}"
 if [ ! $TRAVIS ] && which nuget >/dev/null 2>&1; then
 	get()
 	{
-		nuget install "$1" -Version "$2" -ExcludeVersion
+		nuget install "$1" -Version "$2" -ExcludeVersion -Verbosity quiet
 	}
 else
 	get()
@@ -47,23 +47,17 @@ if [ ! -f ICSharpCode.SharpZipLib.dll ]; then
 	rm -rf SharpZipLib
 fi
 
-if [ ! -f MaxMind.GeoIP2.dll ]; then
-	echo "Fetching MaxMind.GeoIP2 from NuGet"
-	get Newtonsoft.Json 8.0.3
-	get MaxMind.Db 2.0.0
-	get MaxMind.GeoIP2 2.6.0
+if [ ! -f MaxMind.Db.dll ]; then
+	echo "Fetching MaxMind.Db from NuGet"
+	get MaxMind.Db 2.0.0 -IgnoreDependencies
 	cp ./MaxMind.Db/lib/net45/MaxMind.Db.* .
 	rm -rf MaxMind.Db
-	cp ./MaxMind.GeoIP2/lib/net45/MaxMind.GeoIP2* .
-	rm -rf MaxMind.GeoIP2
-	cp ./Newtonsoft.Json/lib/net45/Newtonsoft.Json* .
-	rm -rf Newtonsoft.Json
 fi
 
 if [ ! -f SharpFont.dll ]; then
 	echo "Fetching SharpFont from NuGet"
-	get SharpFont 3.1.0
-	cp ./SharpFont/lib/net20/SharpFont* .
+	get SharpFont 4.0.1
+	cp ./SharpFont/lib/net45/SharpFont* .
 	cp ./SharpFont/config/SharpFont.dll.config .
 	rm -rf SharpFont SharpFont.Dependencies
 fi
@@ -85,9 +79,10 @@ fi
 
 if [ ! -f Open.Nat.dll ]; then
 	echo "Fetching Open.Nat from NuGet"
-	get Open.NAT 2.1.0
-	cp ./Open.NAT/lib/net45/Open.Nat.dll .
-	rm -rf Open.NAT
+	get Open.Nat 2.1.0
+	if [ -d ./Open.NAT ]; then mv Open.NAT Open.Nat; fi
+	cp ./Open.Nat/lib/net45/Open.Nat.dll .
+	rm -rf Open.Nat
 fi
 
 if [ ! -f FuzzyLogicLibrary.dll ]; then
@@ -99,8 +94,8 @@ fi
 
 if [ ! -f SDL2-CS.dll -o ! -f SDL2-CS.dll.config ]; then
 	echo "Fetching SDL2-CS from GitHub."
-	curl -s -L -O https://github.com/OpenRA/SDL2-CS/releases/download/20151227/SDL2-CS.dll
-	curl -s -L -O https://github.com/OpenRA/SDL2-CS/releases/download/20151227/SDL2-CS.dll.config
+	curl -s -L -O https://github.com/OpenRA/SDL2-CS/releases/download/20161223/SDL2-CS.dll
+	curl -s -L -O https://github.com/OpenRA/SDL2-CS/releases/download/20161223/SDL2-CS.dll.config
 fi
 
 if [ ! -f OpenAL-CS.dll -o ! -f OpenAL-CS.dll.config ]; then
@@ -119,4 +114,11 @@ if [ ! -f SmarIrc4net.dll ]; then
 	get SmartIrc4net 0.4.5.1
 	cp ./SmartIrc4net/lib/net40/SmarIrc4net* .
 	rm -rf SmartIrc4net
+fi
+
+if [ ! -f rix0rrr.BeaconLib.dll ]; then
+	echo "Fetching rix0rrr.BeaconLib from NuGet."
+	get rix0rrr.BeaconLib 1.0.1
+	cp ./rix0rrr.BeaconLib/lib/net40/rix0rrr.BeaconLib.dll .
+	rm -rf rix0rrr.BeaconLib
 fi

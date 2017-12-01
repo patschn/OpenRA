@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -28,6 +28,7 @@ namespace OpenRA
 	{
 		public static readonly MapPreview UnknownMap = new MapPreview(null, null, MapGridType.Rectangular, null);
 		public readonly IReadOnlyDictionary<IReadOnlyPackage, MapClassification> MapLocations;
+		readonly Dictionary<IReadOnlyPackage, MapClassification> mapLocations = new Dictionary<IReadOnlyPackage, MapClassification>();
 
 		readonly Cache<string, MapPreview> previews;
 		readonly ModData modData;
@@ -45,8 +46,16 @@ namespace OpenRA
 			previews = new Cache<string, MapPreview>(uid => new MapPreview(modData, uid, gridType.Value, this));
 			sheetBuilder = new SheetBuilder(SheetType.BGRA);
 
+			MapLocations = new ReadOnlyDictionary<IReadOnlyPackage, MapClassification>(mapLocations);
+		}
+
+		public void LoadMaps()
+		{
+			// Utility mod that does not support maps
+			if (!modData.Manifest.Contains<MapGrid>())
+				return;
+
 			// Enumerate map directories
-			var mapLocations = new Dictionary<IReadOnlyPackage, MapClassification>();
 			foreach (var kv in modData.Manifest.MapFolders)
 			{
 				var name = kv.Key;
@@ -54,12 +63,21 @@ namespace OpenRA
 					? MapClassification.Unknown : Enum<MapClassification>.Parse(kv.Value);
 
 				IReadOnlyPackage package;
-				var optional = name.StartsWith("~");
+				var optional = name.StartsWith("~", StringComparison.Ordinal);
 				if (optional)
 					name = name.Substring(1);
 
 				try
 				{
+					// HACK: If the path is inside the the support directory then we may need to create it
+					if (name.StartsWith("^", StringComparison.Ordinal))
+					{
+						// Assume that the path is a directory if there is not an existing file with the same name
+						var resolved = Platform.ResolvePath(name);
+						if (!File.Exists(resolved))
+							Directory.CreateDirectory(resolved);
+					}
+
 					package = modData.ModFiles.OpenPackage(name);
 				}
 				catch
@@ -73,15 +91,6 @@ namespace OpenRA
 				mapLocations.Add(package, classification);
 			}
 
-			MapLocations = new ReadOnlyDictionary<IReadOnlyPackage, MapClassification>(mapLocations);
-		}
-
-		public void LoadMaps()
-		{
-			// Utility mod that does not support maps
-			if (!modData.Manifest.Contains<MapGrid>())
-				return;
-
 			var mapGrid = modData.Manifest.Get<MapGrid>();
 			foreach (var kv in MapLocations)
 			{
@@ -92,7 +101,7 @@ namespace OpenRA
 					{
 						using (new Support.PerfTimer(map))
 						{
-							mapPackage = modData.ModFiles.OpenPackage(map, kv.Key);
+							mapPackage = kv.Key.OpenPackage(map, modData.ModFiles);
 							if (mapPackage == null)
 								continue;
 
@@ -113,7 +122,7 @@ namespace OpenRA
 			}
 		}
 
-		public void QueryRemoteMapDetails(IEnumerable<string> uids, Action<MapPreview> mapDetailsReceived = null, Action queryFailed = null)
+		public void QueryRemoteMapDetails(string repositoryUrl, IEnumerable<string> uids, Action<MapPreview> mapDetailsReceived = null, Action queryFailed = null)
 		{
 			var maps = uids.Distinct()
 				.Select(uid => previews[uid])
@@ -126,7 +135,7 @@ namespace OpenRA
 			foreach (var p in maps.Values)
 				p.UpdateRemoteSearch(MapStatus.Searching, null);
 
-			var url = Game.Settings.Game.MapRepository + "hash/" + string.Join(",", maps.Keys) + "/yaml";
+			var url = repositoryUrl + "hash/" + string.Join(",", maps.Keys) + "/yaml";
 
 			Action<DownloadDataCompletedEventArgs> onInfoComplete = i =>
 			{
@@ -201,7 +210,19 @@ namespace OpenRA
 				foreach (var p in todo)
 				{
 					if (p.Preview != null)
-						Game.RunAfterTick(() => p.SetMinimap(sheetBuilder.Add(p.Preview)));
+					{
+						Game.RunAfterTick(() =>
+						{
+							try
+							{
+								p.SetMinimap(sheetBuilder.Add(p.Preview));
+							}
+							catch (Exception e)
+							{
+								Log.Write("debug", "Failed to load minimap with exception: {0}", e);
+							}
+						});
+					}
 
 					// Yuck... But this helps the UI Jank when opening the map selector significantly.
 					Thread.Sleep(Environment.ProcessorCount == 1 ? 25 : 5);

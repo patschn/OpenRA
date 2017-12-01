@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -18,7 +18,7 @@ using OpenRA.Traits;
 
 namespace OpenRA.Mods.Common.Traits.Render
 {
-	public class WithVoxelTurretInfo : UpgradableTraitInfo, IRenderActorPreviewVoxelsInfo, Requires<RenderVoxelsInfo>, Requires<TurretedInfo>
+	public class WithVoxelTurretInfo : ConditionalTraitInfo, IRenderActorPreviewVoxelsInfo, Requires<RenderVoxelsInfo>, Requires<TurretedInfo>
 	{
 		[Desc("Voxel sequence name to use")]
 		public readonly string Sequence = "turret";
@@ -26,29 +26,32 @@ namespace OpenRA.Mods.Common.Traits.Render
 		[Desc("Turreted 'Turret' key to display")]
 		public readonly string Turret = "primary";
 
+		[Desc("Defines if the Voxel should have a shadow.")]
+		public readonly bool ShowShadow = true;
+
 		public override object Create(ActorInitializer init) { return new WithVoxelTurret(init.Self, this); }
 
-		public IEnumerable<VoxelAnimation> RenderPreviewVoxels(
+		public IEnumerable<ModelAnimation> RenderPreviewVoxels(
 			ActorPreviewInitializer init, RenderVoxelsInfo rv, string image, Func<WRot> orientation, int facings, PaletteReference p)
 		{
-			if (UpgradeMinEnabledLevel > 0)
+			if (!EnabledByDefault)
 				yield break;
 
 			var body = init.Actor.TraitInfo<BodyOrientationInfo>();
 			var t = init.Actor.TraitInfos<TurretedInfo>()
 				.First(tt => tt.Turret == Turret);
 
-			var voxel = VoxelProvider.GetVoxel(image, Sequence);
+			var model = init.World.ModelCache.GetModelSequence(image, Sequence);
 			Func<WVec> turretOffset = () => body.LocalToWorld(t.Offset.Rotate(orientation()));
 
 			var turretFacing = Turreted.TurretFacingFromInit(init, t.InitialFacing, Turret);
 			Func<WRot> turretBodyOrientation = () => WRot.FromYaw(WAngle.FromFacing(turretFacing()) - orientation().Yaw);
-			yield return new VoxelAnimation(voxel, turretOffset,
-				() => new[] { turretBodyOrientation(), body.QuantizeOrientation(orientation(), facings) }, () => false, () => 0);
+			yield return new ModelAnimation(model, turretOffset,
+				() => new[] { turretBodyOrientation(), body.QuantizeOrientation(orientation(), facings) }, () => false, () => 0, ShowShadow);
 		}
 	}
 
-	public class WithVoxelTurret : UpgradableTrait<WithVoxelTurretInfo>, INotifyBuildComplete, INotifySold, INotifyTransform
+	public class WithVoxelTurret : ConditionalTrait<WithVoxelTurretInfo>, INotifyBuildComplete, INotifySold, INotifyTransform
 	{
 		readonly Actor self;
 		readonly Turreted turreted;
@@ -67,9 +70,9 @@ namespace OpenRA.Mods.Common.Traits.Render
 			buildComplete = !self.Info.HasTraitInfo<BuildingInfo>(); // always render instantly for units
 
 			var rv = self.Trait<RenderVoxels>();
-			rv.Add(new VoxelAnimation(VoxelProvider.GetVoxel(rv.Image, Info.Sequence),
+			rv.Add(new ModelAnimation(self.World.ModelCache.GetModelSequence(rv.Image, Info.Sequence),
 				() => turreted.Position(self), TurretRotation,
-				() => IsTraitDisabled || !buildComplete, () => 0));
+				() => IsTraitDisabled || !buildComplete, () => 0, info.ShowShadow));
 		}
 
 		IEnumerable<WRot> TurretRotation()

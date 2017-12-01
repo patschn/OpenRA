@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -17,7 +17,7 @@ using OpenRA.Traits;
 namespace OpenRA.Mods.Common.Traits
 {
 	[Desc("Derive facings from sprite body sequence.")]
-	public class QuantizeFacingsFromSequenceInfo : UpgradableTraitInfo, IQuantizeBodyOrientationInfo, Requires<RenderSpritesInfo>
+	public class QuantizeFacingsFromSequenceInfo : ConditionalTraitInfo, IQuantizeBodyOrientationInfo, Requires<RenderSpritesInfo>
 	{
 		[Desc("Defines sequence to derive facings from."), SequenceReference]
 		public readonly string Sequence = "idle";
@@ -34,7 +34,7 @@ namespace OpenRA.Mods.Common.Traits
 		public override object Create(ActorInitializer init) { return new QuantizeFacingsFromSequence(this); }
 	}
 
-	public class QuantizeFacingsFromSequence : UpgradableTrait<QuantizeFacingsFromSequenceInfo>
+	public class QuantizeFacingsFromSequence : ConditionalTrait<QuantizeFacingsFromSequenceInfo>
 	{
 		public QuantizeFacingsFromSequence(QuantizeFacingsFromSequenceInfo info)
 			: base(info) { }

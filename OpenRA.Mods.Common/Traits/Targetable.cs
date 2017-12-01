@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -16,7 +16,7 @@ using OpenRA.Traits;
 namespace OpenRA.Mods.Common.Traits
 {
 	[Desc("Actor can be targeted.")]
-	public class TargetableInfo : UpgradableTraitInfo, ITargetableInfo
+	public class TargetableInfo : ConditionalTraitInfo, ITargetableInfo
 	{
 		[Desc("Target type. Used for filtering (in)valid targets.")]
 		public readonly HashSet<string> TargetTypes = new HashSet<string>();
@@ -27,7 +27,7 @@ namespace OpenRA.Mods.Common.Traits
 		public override object Create(ActorInitializer init) { return new Targetable(init.Self, this); }
 	}
 
-	public class Targetable : UpgradableTrait<TargetableInfo>, ITargetable, INotifyCreated
+	public class Targetable : ConditionalTrait<TargetableInfo>, ITargetable
 	{
 		protected static readonly string[] None = new string[] { };
 		protected Cloak[] cloaks;
@@ -35,9 +35,11 @@ namespace OpenRA.Mods.Common.Traits
 		public Targetable(Actor self, TargetableInfo info)
 			: base(info) { }
 
-		void INotifyCreated.Created(Actor self)
+		protected override void Created(Actor self)
 		{
 			cloaks = self.TraitsImplementing<Cloak>().ToArray();
+
+			base.Created(self);
 		}
 
 		public virtual bool TargetableBy(Actor self, Actor viewer)

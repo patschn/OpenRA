@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -74,13 +74,21 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 					OriginalGraphicsWindowedSize != current.Graphics.WindowedSize ||
 					OriginalGraphicsFullscreenSize != current.Graphics.FullscreenSize ||
 					OriginalServerDiscoverNatDevices != current.Server.DiscoverNatDevices)
+				{
+					Action restart = () =>
+					{
+						var external = Game.ExternalMods[ExternalMod.MakeKey(Game.ModData.Manifest)];
+						Game.SwitchToExternalMod(external, null, closeAndExit);
+					};
+
 					ConfirmationDialogs.ButtonPrompt(
 						title: "Restart Now?",
 						text: "Some changes will not be applied until\nthe game is restarted. Restart now?",
-						onConfirm: Game.Restart,
+						onConfirm: restart,
 						onCancel: closeAndExit,
 						confirmText: "Restart Now",
 						cancelText: "Restart Later");
+				}
 				else
 					closeAndExit();
 			};
@@ -154,7 +162,6 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			BindCheckboxPref(panel, "PIXELDOUBLE_CHECKBOX", ds, "PixelDouble");
 			BindCheckboxPref(panel, "CURSORDOUBLE_CHECKBOX", ds, "CursorDouble");
 			BindCheckboxPref(panel, "FRAME_LIMIT_CHECKBOX", ds, "CapFramerate");
-			BindCheckboxPref(panel, "SHOW_SHELLMAP", gs, "ShowShellmap");
 			BindCheckboxPref(panel, "DISPLAY_TARGET_LINES_CHECKBOX", gs, "DrawTargetLine");
 			BindCheckboxPref(panel, "PLAYER_STANCE_COLORS_CHECKBOX", gs, "UsePlayerStanceColors");
 
@@ -278,15 +285,11 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 		Action ResetDisplayPanel(Widget panel)
 		{
 			var ds = Game.Settings.Graphics;
-			var gs = Game.Settings.Game;
 			var ps = Game.Settings.Player;
 			var dds = new GraphicSettings();
-			var dgs = new GameSettings();
 			var dps = new PlayerSettings();
 			return () =>
 			{
-				gs.ShowShellmap = dgs.ShowShellmap;
-
 				ds.CapFramerate = dds.CapFramerate;
 				ds.MaxFramerate = dds.MaxFramerate;
 				ds.Language = dds.Language;
@@ -516,7 +519,6 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 					{ "AttackMoveKey", "Attack Move" },
 					{ "StopKey", "Stop" },
 					{ "ScatterKey", "Scatter" },
-					{ "StanceCycleKey", "Cycle Stance" },
 					{ "DeployKey", "Deploy" },
 					{ "GuardKey", "Guard" }
 				};
@@ -527,6 +529,24 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 
 				foreach (var kv in hotkeys)
 					BindHotkeyPref(kv, ks, unitTemplate, hotkeyList);
+			}
+
+			// Unit stance
+			{
+				var hotkeys = new Dictionary<string, string>()
+				{
+					{ "StanceHoldFireKey", "Hold fire" },
+					{ "StanceReturnFireKey", "Return fire" },
+					{ "StanceDefendKey", "Defend" },
+					{ "StanceAttackAnythingKey", "Attack anything" }
+				};
+
+				var header = ScrollItemWidget.Setup(hotkeyHeader, returnTrue, doNothing);
+				header.Get<LabelWidget>("LABEL").GetText = () => "Unit Stance Commands";
+				hotkeyList.AddChild(header);
+
+				foreach (var kv in hotkeys)
+					BindHotkeyPref(kv, ks, globalTemplate, hotkeyList);
 			}
 
 			// Production
@@ -579,7 +599,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 				};
 
 				var header = ScrollItemWidget.Setup(hotkeyHeader, returnTrue, doNothing);
-				header.Get<LabelWidget>("LABEL").GetText = () => "Developer commands";
+				header.Get<LabelWidget>("LABEL").GetText = () => "Developer Commands";
 				hotkeyList.AddChild(header);
 
 				foreach (var kv in hotkeys)
@@ -597,7 +617,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 				};
 
 				var header = ScrollItemWidget.Setup(hotkeyHeader, returnTrue, doNothing);
-				header.Get<LabelWidget>("LABEL").GetText = () => "Music commands";
+				header.Get<LabelWidget>("LABEL").GetText = () => "Music Commands";
 				hotkeyList.AddChild(header);
 
 				foreach (var kv in hotkeys)
@@ -707,6 +727,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 				{ "Ctrl", Modifiers.Ctrl },
 				{ "Meta", Modifiers.Meta },
 				{ "Shift", Modifiers.Shift },
+				{ "None", Modifiers.None }
 			};
 
 			Func<string, ScrollItemWidget, ScrollItemWidget> setupItem = (o, itemTemplate) =>

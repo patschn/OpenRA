@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -32,6 +32,9 @@ namespace OpenRA.Mods.Common.Traits
 			"It cannot be paused, but can be overridden by selecting a new track.")]
 		public readonly string BackgroundMusic = null;
 
+		[Desc("Disable all world sounds (combat etc).")]
+		public readonly bool DisableWorldSounds = false;
+
 		public object Create(ActorInitializer init) { return new MusicPlaylist(init.World, this); }
 	}
 
@@ -54,6 +57,9 @@ namespace OpenRA.Mods.Common.Traits
 		{
 			this.info = info;
 			this.world = world;
+
+			if (info.DisableWorldSounds)
+				Game.Sound.DisableWorldSounds = true;
 
 			IsMusicInstalled = world.Map.Rules.InstalledMusic.Any();
 			if (!IsMusicInstalled)
@@ -220,6 +226,8 @@ namespace OpenRA.Mods.Common.Traits
 		{
 			if (currentSong != null)
 				Game.Sound.StopMusic();
+
+			Game.Sound.DisableWorldSounds = false;
 		}
 	}
 }

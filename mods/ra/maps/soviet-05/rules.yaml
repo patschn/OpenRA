@@ -82,13 +82,14 @@ APC:
 	Buildable:
 		Prerequisites: ~disabled
 
-DOME.IGNORE:
-	Inherits: DOME
-	RenderSprites:
-		Image: DOME
-	AutoTargetIgnore:
-	Buildable:
-		Prerequisites: ~disabled
+DOME:
+	ExternalCondition@lua:
+		Condition: captured
+	Targetable:
+		RequiresCondition: captured
+	Targetable@NOAUTOTARGET:
+		RequiresCondition: !captured
+		TargetTypes: Ground, Structure, C4, DetonateAttack, SpyInfiltrate, NoAutoTarget
 
 powerproxy.paratroopers:
 	ParatroopersPower:

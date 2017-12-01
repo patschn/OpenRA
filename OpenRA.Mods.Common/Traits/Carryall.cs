@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -42,7 +42,7 @@ namespace OpenRA.Mods.Common.Traits
 		public virtual object Create(ActorInitializer init) { return new Carryall(init.Self, this); }
 	}
 
-	public class Carryall : INotifyKilled, ISync, IRender, INotifyActorDisposing, IIssueOrder, IResolveOrder, IOrderVoice
+	public class Carryall : INotifyKilled, ISync, ITick, IRender, INotifyActorDisposing, IIssueOrder, IResolveOrder, IOrderVoice
 	{
 		public enum CarryallState
 		{
@@ -68,7 +68,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		public Carryall(Actor self, CarryallInfo info)
 		{
-			this.Info = info;
+			Info = info;
 
 			Carryable = null;
 			State = CarryallState.Idle;
@@ -77,6 +77,13 @@ namespace OpenRA.Mods.Common.Traits
 			body = self.Trait<BodyOrientation>();
 			move = self.Trait<IMove>();
 			facing = self.Trait<IFacing>();
+		}
+
+		void ITick.Tick(Actor self)
+		{
+			// Cargo may be killed in the same tick as, but after they are attached
+			if (Carryable != null && Carryable.IsDead)
+				DetachCarryable(self);
 		}
 
 		void INotifyActorDisposing.Disposing(Actor self)
@@ -156,7 +163,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		IEnumerable<IRenderable> IRender.Render(Actor self, WorldRenderer wr)
 		{
-			if (State == CarryallState.Carrying)
+			if (State == CarryallState.Carrying && !Carryable.IsDead)
 			{
 				if (carryablePreview == null)
 				{
@@ -281,13 +288,16 @@ namespace OpenRA.Mods.Common.Traits
 
 			static bool CanTarget(Actor self, Actor target)
 			{
-				if (!target.AppearsFriendlyTo(self))
+				if (target == null || !target.AppearsFriendlyTo(self))
 					return false;
+
 				var carryable = target.TraitOrDefault<Carryable>();
-				if (carryable == null)
+				if (carryable == null || carryable.IsTraitDisabled)
 					return false;
+
 				if (carryable.Reserved && carryable.Carrier != self)
 					return false;
+
 				return true;
 			}
 

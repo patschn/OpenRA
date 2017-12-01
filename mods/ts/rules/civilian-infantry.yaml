@@ -14,7 +14,9 @@ WEEDGUY:
 		CrushSound: squishy2.aud
 	Armament:
 		Weapon: FireballLauncher
-		LocalOffset: 85,0,384
+		LocalOffset: 317,0,453
+	TakeCover:
+		ProneOffset: 128,0,-320
 	AttackFrontal:
 		Voice: Attack
 	-SpawnActorOnDeath@FLAMEGUY:
@@ -26,6 +28,8 @@ WEEDGUY:
 UMAGON:
 	Inherits: ^Soldier
 	Inherits@2: ^HealsOnTiberium
+	Inherits@EXPERIENCE: ^GainsExperience
+	Inherits@AUTOTARGET: ^AutoTargetGround
 	Valued:
 		Cost: 400
 	Tooltip:
@@ -44,7 +48,7 @@ UMAGON:
 	AttackFrontal:
 		Voice: Attack
 	WithInfantryBody:
-		AttackSequence: attack
+		DefaultAttackSequence: attack
 	ProducibleWithLevel:
 		Prerequisites: barracks.upgraded
 
@@ -52,7 +56,7 @@ CHAMSPY:
 	Inherits: ^Soldier
 	Valued:
 		Cost: 700
-	DisguiseToolTip:
+	DisguiseTooltip:
 		Name: Chameleon Spy
 	Voiced:
 		VoiceSet: Spy
@@ -64,17 +68,16 @@ CHAMSPY:
 		Range: 9c0
 	Passenger:
 	Disguise:
+		DisguisedCondition: disguise
 	WithDecoration@disguise:
 		Image: pips
 		Sequence: pip-disguise
 		Palette: pips
 		ReferencePoint: Top, Right
 		ZOffset: 256
-		UpgradeTypes: disguise
-		UpgradeMinEnabledLevel: 1
+		RequiresCondition: disguise
 	Infiltrates:
 		Types: SpyInfiltrate
-	-AutoTarget:
 	-WithInfantryBody:
 	WithDisguisingInfantryBody:
 		IdleSequences: idle1,idle2
@@ -82,6 +85,8 @@ CHAMSPY:
 MUTANT:
 	Inherits: ^Soldier
 	Inherits@2: ^HealsOnTiberium
+	Inherits@EXPERIENCE: ^GainsExperience
+	Inherits@AUTOTARGET: ^AutoTargetGround
 	Valued:
 		Cost: 100
 	Tooltip:
@@ -99,13 +104,15 @@ MUTANT:
 	AttackFrontal:
 		Voice: Attack
 	WithInfantryBody:
-		AttackSequence: attack
+		DefaultAttackSequence: attack
 	ProducibleWithLevel:
 		Prerequisites: barracks.upgraded
 
 MWMN:
 	Inherits: ^Soldier
 	Inherits@2: ^HealsOnTiberium
+	Inherits@EXPERIENCE: ^GainsExperience
+	Inherits@AUTOTARGET: ^AutoTargetGround
 	Valued:
 		Cost: 100
 	Tooltip:
@@ -123,13 +130,15 @@ MWMN:
 	AttackFrontal:
 		Voice: Attack
 	WithInfantryBody:
-		AttackSequence: attack
+		DefaultAttackSequence: attack
 	ProducibleWithLevel:
 		Prerequisites: barracks.upgraded
 
 MUTANT3:
 	Inherits: ^Soldier
 	Inherits@2: ^HealsOnTiberium
+	Inherits@EXPERIENCE: ^GainsExperience
+	Inherits@AUTOTARGET: ^AutoTargetGround
 	Valued:
 		Cost: 100
 	Tooltip:
@@ -147,7 +156,7 @@ MUTANT3:
 	AttackFrontal:
 		Voice: Attack
 	WithInfantryBody:
-		AttackSequence: attack
+		DefaultAttackSequence: attack
 	ProducibleWithLevel:
 		Prerequisites: barracks.upgraded
 
@@ -166,9 +175,8 @@ TRATOS:
 		Speed: 71
 	RevealsShroud:
 		Range: 4c0
-	-AutoTarget:
 	WithInfantryBody:
-		AttackSequence: attack
+		DefaultAttackSequence:
 
 OXANNA:
 	Inherits: ^Soldier
@@ -184,9 +192,8 @@ OXANNA:
 		Speed: 56
 	RevealsShroud:
 		Range: 4c0
-	-AutoTarget:
 	WithInfantryBody:
-		AttackSequence: attack
+		DefaultAttackSequence: attack
 
 SLAV:
 	Inherits: ^Soldier
@@ -202,84 +209,14 @@ SLAV:
 		Speed: 56
 	RevealsShroud:
 		Range: 4c0
-	-AutoTarget:
 	WithInfantryBody:
-		AttackSequence: attack
-
-DOGGIE:
-	Inherits@1: ^Infantry
-	Inherits@2: ^RegularInfantryDeath
-	Inherits@3: ^HealsOnTiberium
-	Tooltip:
-		Name: Tiberian Fiend
-	Health:
-		HP: 250
-		Shape: Circle
-			Radius: 213
-	Valued:
-		Cost: 100
-	Armor:
-		Type: Light
-	-RevealsShroud:
-	Mobile:
-		Speed: 113
-	Voiced:
-		VoiceSet: Fiend
-	Targetable:
-		TargetTypes: Ground
-	Armament:
-		Weapon: FiendShard
-	AttackFrontal:
-		Voice: Attack
-	AttackWander:
-		WanderMoveRadius: 2
-		MinMoveDelayInTicks: 25
-		MaxMoveDelayInTicks: 45
-	-SpawnActorOnDeath@FLAMEGUY:
-	WithDeathAnimation@fire:
-		DeathSequence: die-
-		DeathTypes:
-			FireDeath: burning
-
-VISC_SML:
-	Inherits: ^Visceroid
-	Tooltip:
-		Name: Baby Visceroid
-		Description: infantry transmorgifies into this
-	Health:
-		HP: 200
-	AttackWander:
-		WanderMoveRadius: 2
-		MinMoveDelayInTicks: 30
-		MaxMoveDelayInTicks: 60
-	RenderSprites:
-		Image: vissml
-
-VISC_LRG:
-	Inherits: ^Visceroid
-	Tooltip:
-		Name: Adult Visceroid
-		Description: 2 small visceroids combine into this
-	Health:
-		HP: 500
-	Armament:
-		Weapon: SlimeAttack
-	AutoTarget:
-	AttackFrontal:
-		Voice: Attack
-	AttackWander:
-		WanderMoveRadius: 2
-		MinMoveDelayInTicks: 25
-		MaxMoveDelayInTicks: 45
-	Mobile:
-		Crushes: crate, infantry
-	RenderSprites:
-		Image: vislrg
+		DefaultAttackSequence: attack
 
 CIV1:
 	Inherits: ^CivilianInfantry
+	Inherits@AUTOTARGET: ^AutoTargetGround
 	WithInfantryBody:
-		AttackSequence: attack
+		DefaultAttackSequence: attack
 	Armament:
 		Weapon: Pistola
 	AttackFrontal:
@@ -287,12 +224,12 @@ CIV1:
 
 CIV2:
 	Inherits: ^CivilianInfantry
-	-AutoTarget:
 
 CIV3:
 	Inherits: ^CivilianInfantry
+	Inherits@AUTOTARGET: ^AutoTargetGround
 	WithInfantryBody:
-		AttackSequence: attack
+		DefaultAttackSequence: attack
 	Armament:
 		Weapon: Pistola
 	AttackFrontal:

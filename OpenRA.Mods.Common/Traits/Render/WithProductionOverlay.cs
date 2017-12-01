@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -80,30 +80,30 @@ namespace OpenRA.Mods.Common.Traits.Render
 				throw new InvalidOperationException("Can't find production queues.");
 		}
 
-		public void Created(Actor self)
+		void INotifyCreated.Created(Actor self)
 		{
 			if (buildComplete)
 				SelectQueue(self);
 		}
 
-		public void BuildingComplete(Actor self)
+		void INotifyBuildComplete.BuildingComplete(Actor self)
 		{
 			buildComplete = true;
 			SelectQueue(self);
 		}
 
-		public void OnOwnerChanged(Actor self, Player oldOwner, Player newOwner)
+		void INotifyOwnerChanged.OnOwnerChanged(Actor self, Player oldOwner, Player newOwner)
 		{
 			self.World.AddFrameEndTask(w => SelectQueue(self));
 		}
 
-		public void Sold(Actor self) { }
-		public void Selling(Actor self)
+		void INotifySold.Sold(Actor self) { }
+		void INotifySold.Selling(Actor self)
 		{
 			buildComplete = false;
 		}
 
-		public void DamageStateChanged(Actor self, AttackInfo e)
+		void INotifyDamageStateChanged.DamageStateChanged(Actor self, AttackInfo e)
 		{
 			overlay.ReplaceAnim(RenderSprites.NormalizeSequence(overlay, e.DamageState, overlay.CurrentSequence.Name));
 		}

@@ -12,6 +12,13 @@ World:
 
 SBAG:
 	-Crushable:
+	Buildable:
+		Prerequisites: ~disabled
+
+CYCL:
+	-Crushable:
+	Buildable:
+		Prerequisites: ~disabled
 
 WEAP:
 	Buildable:
@@ -37,7 +44,15 @@ GUN:
 	Buildable:
 		Prerequisites: ~disabled
 
+GTWR:
+	Buildable:
+		Prerequisites: ~disabled
+
 ATWR:
+	Buildable:
+		Prerequisites: ~disabled
+
+BRIK:
 	Buildable:
 		Prerequisites: ~disabled
 
@@ -79,25 +94,6 @@ SAM:
 
 HQ:
 	Tooltip:
-		Description: Provides an overview of the battlefield.\n  Requires power to operate.
 	-AirstrikePower:
-
-airstrike.proxy:
-	AlwaysVisible:
-	AirstrikePower:
-		Icon: airstrike
-		StartFullyCharged: True
-		ChargeTime: 120
-		SquadSize: 3
-		QuantizedFacings: 8
-		Description: Air Strike
-		LongDesc: Deploy an aerial napalm strike.\nBurns buildings and infantry along a line.
-		EndChargeSound: airredy1.aud
-		SelectTargetSound: select1.aud
-		InsufficientPowerSound: nopower1.aud
-		IncomingSound: enemya.aud
-		UnitType: a10
-		DisplayBeacon: True
-		BeaconPoster: airstrike
-		DisplayRadarPing: True
-		CameraActor: camera
+	Buildable:
+		Description: Provides an overview of the battlefield.\n  Requires power to operate.

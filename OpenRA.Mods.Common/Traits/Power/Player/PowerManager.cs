@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -9,6 +9,7 @@
  */
 #endregion
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using OpenRA.Traits;
@@ -24,7 +25,7 @@ namespace OpenRA.Mods.Common.Traits
 		public object Create(ActorInitializer init) { return new PowerManager(init.Self, this); }
 	}
 
-	public class PowerManager : ITick, ISync
+	public class PowerManager : ITick, ISync, IResolveOrder
 	{
 		readonly Actor self;
 		readonly PowerManagerInfo info;
@@ -140,11 +141,17 @@ namespace OpenRA.Mods.Common.Traits
 
 		void UpdatePowerOutageActors()
 		{
-			var actors = self.World.ActorsHavingTrait<AffectedByPowerOutage>()
-				.Where(a => !a.IsDead && a.IsInWorld && a.Owner == self.Owner);
+			var traitPairs = self.World.ActorsWithTrait<AffectedByPowerOutage>()
+				.Where(p => !p.Actor.IsDead && p.Actor.IsInWorld && p.Actor.Owner == self.Owner);
 
-			foreach (var a in actors)
-				UpdateActor(a);
+			foreach (var p in traitPairs)
+				p.Trait.UpdateStatus(p.Actor);
+		}
+
+		void IResolveOrder.ResolveOrder(Actor self, Order order)
+		{
+			if (devMode.Enabled && order.OrderString == "PowerOutage")
+				TriggerPowerOutage((int)order.ExtraData);
 		}
 	}
 }

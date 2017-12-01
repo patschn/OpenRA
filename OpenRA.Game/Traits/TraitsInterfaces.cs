@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -66,20 +66,6 @@ namespace OpenRA.Traits
 		}
 	}
 
-	[Flags]
-	public enum ImpactType
-	{
-		None = 0,
-		Ground = 1,
-		GroundHit = 2,
-		Water = 4,
-		WaterHit = 8,
-		Air = 16,
-		AirHit = 32,
-		TargetTerrain = 64,
-		TargetHit = 128
-	}
-
 	public class AttackInfo
 	{
 		public Damage Damage;
@@ -109,6 +95,8 @@ namespace OpenRA.Traits
 	public interface ITick { void Tick(Actor self); }
 	public interface ITickRender { void TickRender(WorldRenderer wr, Actor self); }
 	public interface IRender { IEnumerable<IRenderable> Render(Actor self, WorldRenderer wr); }
+
+	public interface IAutoSelectionSizeInfo : ITraitInfoInterface { }
 	public interface IAutoSelectionSize { int2 SelectionSize(Actor self); }
 
 	public interface IIssueOrder
@@ -143,23 +131,12 @@ namespace OpenRA.Traits
 	public interface INotifyCreated { void Created(Actor self); }
 	public interface INotifyAddedToWorld { void AddedToWorld(Actor self); }
 	public interface INotifyRemovedFromWorld { void RemovedFromWorld(Actor self); }
-	public interface INotifySold { void Selling(Actor self); void Sold(Actor self); }
 	public interface INotifyDamage { void Damaged(Actor self, AttackInfo e); }
-	public interface INotifyDamageStateChanged { void DamageStateChanged(Actor self, AttackInfo e); }
-	public interface INotifyRepair { void Repairing(Actor self, Actor target); }
 	public interface INotifyKilled { void Killed(Actor self, AttackInfo e); }
 	public interface INotifyActorDisposing { void Disposing(Actor self); }
 	public interface INotifyAppliedDamage { void AppliedDamage(Actor self, Actor damaged, AttackInfo e); }
-	public interface INotifyBuildComplete { void BuildingComplete(Actor self); }
-	public interface INotifyBuildingPlaced { void BuildingPlaced(Actor self); }
-	public interface INotifyProduction { void UnitProduced(Actor self, Actor other, CPos exit); }
-	public interface INotifyOtherProduction { void UnitProducedByOther(Actor self, Actor producer, Actor produced); }
-	public interface INotifyDelivery { void IncomingDelivery(Actor self); void Delivered(Actor self); }
 	public interface INotifyOwnerChanged { void OnOwnerChanged(Actor self, Player oldOwner, Player newOwner); }
 	public interface INotifyEffectiveOwnerChanged { void OnEffectiveOwnerChanged(Actor self, Player oldEffectiveOwner, Player newEffectiveOwner); }
-	public interface INotifyCapture { void OnCapture(Actor self, Actor captor, Player oldOwner, Player newOwner); }
-	public interface INotifyInfiltrated { void Infiltrated(Actor self, Actor infiltrator); }
-	public interface INotifyDiscovered { void OnDiscovered(Actor self, Player discoverer, bool playNotification); }
 
 	public interface ISeedableResource { void Seed(Actor self); }
 
@@ -176,15 +153,7 @@ namespace OpenRA.Traits
 		bool HasVoice(Actor self, string voice);
 	}
 
-	public interface IDemolishableInfo : ITraitInfoInterface { bool IsValidTarget(ActorInfo actorInfo, Actor saboteur); }
-	public interface IDemolishable
-	{
-		void Demolish(Actor self, Actor saboteur);
-		bool IsValidTarget(Actor self, Actor saboteur);
-	}
-
 	public interface IStoreResources { int Capacity { get; } }
-	public interface INotifyDocking { void Docked(Actor self, Actor harvester); void Undocked(Actor self, Actor harvester); }
 
 	public interface IEffectiveOwner
 	{
@@ -232,6 +201,11 @@ namespace OpenRA.Traits
 
 	public interface IRadarColorModifier { Color RadarColorOverride(Actor self, Color color); }
 
+	public interface ITargetableCells
+	{
+		IEnumerable<Pair<CPos, SubCell>> TargetableCells();
+	}
+
 	public interface IOccupySpaceInfo : ITraitInfoInterface
 	{
 		IReadOnlyDictionary<CPos, SubCell> OccupiedCells(ActorInfo info, CPos location, SubCell subCell = SubCell.Any);
@@ -265,15 +239,31 @@ namespace OpenRA.Traits
 		}
 	}
 
+	public enum SubCell { Invalid = int.MinValue, Any = int.MinValue / 2, FullCell = 0, First = 1 }
+	public interface IActorMap
+	{
+		IEnumerable<Actor> GetActorsAt(CPos a);
+		IEnumerable<Actor> GetActorsAt(CPos a, SubCell sub);
+		bool HasFreeSubCell(CPos cell, bool checkTransient = true);
+		SubCell FreeSubCell(CPos cell, SubCell preferredSubCell = SubCell.Any, bool checkTransient = true);
+		SubCell FreeSubCell(CPos cell, SubCell preferredSubCell, Func<Actor, bool> checkIfBlocker);
+		bool AnyActorsAt(CPos a);
+		bool AnyActorsAt(CPos a, SubCell sub, bool checkTransient = true);
+		bool AnyActorsAt(CPos a, SubCell sub, Func<Actor, bool> withCondition);
+		void AddInfluence(Actor self, IOccupySpace ios);
+		void RemoveInfluence(Actor self, IOccupySpace ios);
+		int AddCellTrigger(CPos[] cells, Action<Actor> onEntry, Action<Actor> onExit);
+		void RemoveCellTrigger(int id);
+		int AddProximityTrigger(WPos pos, WDist range, WDist vRange, Action<Actor> onEntry, Action<Actor> onExit);
+		void RemoveProximityTrigger(int id);
+		void UpdateProximityTrigger(int id, WPos newPos, WDist newRange, WDist newVRange);
+		void AddPosition(Actor a, IOccupySpace ios);
+		void RemovePosition(Actor a, IOccupySpace ios);
+		void UpdatePosition(Actor a, IOccupySpace ios);
+		IEnumerable<Actor> ActorsInBox(WPos a, WPos b);
+	}
+
 	public interface IRenderModifier { IEnumerable<IRenderable> ModifyRender(Actor self, WorldRenderer wr, IEnumerable<IRenderable> r); }
-	public interface IDamageModifier { int GetDamageModifier(Actor attacker, Damage damage); }
-	public interface ISpeedModifier { int GetSpeedModifier(); }
-	public interface IFirepowerModifier { int GetFirepowerModifier(); }
-	public interface IReloadModifier { int GetReloadModifier(); }
-	public interface IInaccuracyModifier { int GetInaccuracyModifier(); }
-	public interface IRangeModifier { int GetRangeModifier(); }
-	public interface IRangeModifierInfo : ITraitInfoInterface { int GetRangeModifierDefault(); }
-	public interface IPowerModifier { int GetPowerModifier(); }
 	public interface ILoadsPalettes { void LoadPalettes(WorldRenderer wr); }
 	public interface ILoadsPlayerPalettes { void LoadPlayerPalettes(WorldRenderer wr, string playerName, HSLColor playerColor, bool replaceExisting); }
 	public interface IPaletteModifier { void AdjustPalette(IReadOnlyDictionary<string, MutablePalette> b); }
@@ -282,7 +272,11 @@ namespace OpenRA.Traits
 	[RequireExplicitImplementation]
 	public interface ISelectionBar { float GetValue(); Color GetColor(); bool DisplayWhenEmpty { get; } }
 
-	public interface IPositionableInfo : ITraitInfoInterface { }
+	public interface IPositionableInfo : IOccupySpaceInfo
+	{
+		bool CanEnterCell(World world, Actor self, CPos cell, Actor ignoreActor = null, bool checkTransientActors = true);
+	}
+
 	public interface IPositionable : IOccupySpace
 	{
 		bool IsLeavingCell(CPos location, SubCell subCell = SubCell.Any);
@@ -298,7 +292,7 @@ namespace OpenRA.Traits
 	public interface IMove
 	{
 		Activity MoveTo(CPos cell, int nearEnough);
-		Activity MoveTo(CPos cell, Actor ignoredActor);
+		Activity MoveTo(CPos cell, Actor ignoreActor);
 		Activity MoveWithinRange(Target target, WDist range);
 		Activity MoveWithinRange(Target target, WDist minRange, WDist maxRange);
 		Activity MoveFollow(Actor self, Target target, WDist minRange, WDist maxRange);
@@ -308,6 +302,7 @@ namespace OpenRA.Traits
 		Activity VisualMove(Actor self, WPos fromPos, WPos toPos);
 		CPos NearestMoveableCell(CPos target);
 		bool IsMoving { get; set; }
+		bool IsMovingVertically { get; set; }
 		bool CanEnterTargetNow(Actor self, Target target);
 	}
 
@@ -318,8 +313,6 @@ namespace OpenRA.Traits
 		bool IsBlocking(Actor self, CPos cell);
 	}
 
-	public interface INotifyBlockingMove { void OnNotifyBlockingMove(Actor self, Actor blocking); }
-
 	public interface IFacing
 	{
 		int TurnSpeed { get; }
@@ -327,19 +320,6 @@ namespace OpenRA.Traits
 	}
 
 	public interface IFacingInfo : ITraitInfoInterface { int GetInitialFacing(); }
-
-	[RequireExplicitImplementation]
-	public interface ICrushable
-	{
-		bool CrushableBy(Actor self, Actor crusher, HashSet<string> crushClasses);
-	}
-
-	[RequireExplicitImplementation]
-	public interface INotifyCrushed
-	{
-		void OnCrush(Actor self, Actor crusher, HashSet<string> crushClasses);
-		void WarnCrush(Actor self, Actor crusher, HashSet<string> crushClasses);
-	}
 
 	public interface ITraitInfoInterface { }
 	public interface ITraitInfo : ITraitInfoInterface { object Create(ActorInitializer init); }
@@ -357,7 +337,12 @@ namespace OpenRA.Traits
 	public interface IWorldLoaded { void WorldLoaded(World w, WorldRenderer wr); }
 	public interface ICreatePlayers { void CreatePlayers(World w); }
 
-	public interface IBotInfo : ITraitInfoInterface { string Name { get; } }
+	public interface IBotInfo : ITraitInfoInterface
+	{
+		string Type { get; }
+		string Name { get; }
+	}
+
 	public interface IBot
 	{
 		void Activate(Player p);
@@ -367,12 +352,6 @@ namespace OpenRA.Traits
 	public interface IRenderOverlay { void Render(WorldRenderer wr); }
 	public interface INotifyBecomingIdle { void OnBecomingIdle(Actor self); }
 	public interface INotifyIdle { void TickIdle(Actor self); }
-
-	public interface IRenderInfantrySequenceModifier
-	{
-		bool IsModifyingSequence { get; }
-		string SequencePrefix { get; }
-	}
 
 	public interface IRenderAboveWorld { void RenderAboveWorld(Actor self, WorldRenderer wr); }
 	public interface IRenderShroud { void RenderShroud(Shroud shroud, WorldRenderer wr); }

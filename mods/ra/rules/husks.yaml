@@ -95,8 +95,12 @@ TRAN.Husk:
 		Offset: 597,0,213
 		Sequence: rotor2
 	RevealsShroud:
-		Range: 12c0
-		Type: CenterPosition
+		Range: 8c0
+		Type: GroundPosition
+		RevealGeneratedShroud: False
+	RevealsShroud@GAPGEN:
+		Range: 6c0
+		Type: GroundPosition
 	RenderSprites:
 		Image: tran
 
@@ -131,6 +135,7 @@ BADR.Husk:
 		MinDamage: Undamaged
 	RenderSprites:
 		Image: badr
+	-RevealOnDeath:
 
 MIG.Husk:
 	Inherits: ^PlaneHusk
@@ -148,8 +153,12 @@ MIG.Husk:
 		Interval: 2
 		MinDamage: Undamaged
 	RevealsShroud:
-		Range: 12c0
-		Type: CenterPosition
+		Range: 13c0
+		Type: GroundPosition
+		RevealGeneratedShroud: False
+	RevealsShroud@GAPGEN:
+		Range: 11c0
+		Type: GroundPosition
 	RenderSprites:
 		Image: mig
 
@@ -167,8 +176,12 @@ YAK.Husk:
 		Interval: 2
 		MinDamage: Undamaged
 	RevealsShroud:
-		Range: 10c0
-		Type: CenterPosition
+		Range: 11c0
+		Type: GroundPosition
+		RevealGeneratedShroud: False
+	RevealsShroud@GAPGEN:
+		Range: 9c0
+		Type: GroundPosition
 	RenderSprites:
 		Image: yak
 
@@ -187,7 +200,11 @@ HELI.Husk:
 		MinDamage: Undamaged
 	RevealsShroud:
 		Range: 12c0
-		Type: CenterPosition
+		Type: GroundPosition
+		RevealGeneratedShroud: False
+	RevealsShroud@GAPGEN:
+		Range: 10c0
+		Type: GroundPosition
 	RenderSprites:
 		Image: heli
 
@@ -205,7 +222,11 @@ HIND.Husk:
 		MinDamage: Undamaged
 	RevealsShroud:
 		Range: 10c0
-		Type: CenterPosition
+		Type: GroundPosition
+		RevealGeneratedShroud: False
+	RevealsShroud@GAPGEN:
+		Range: 8c0
+		Type: GroundPosition
 	RenderSprites:
 		Image: hind
 

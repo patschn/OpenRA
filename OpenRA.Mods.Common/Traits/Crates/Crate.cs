@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -17,7 +17,7 @@ using OpenRA.Traits;
 
 namespace OpenRA.Mods.Common.Traits
 {
-	class CrateInfo : ITraitInfo, IPositionableInfo, IOccupySpaceInfo, Requires<RenderSpritesInfo>
+	class CrateInfo : ITraitInfo, IPositionableInfo, Requires<RenderSpritesInfo>
 	{
 		[Desc("Length of time (in seconds) until the crate gets removed automatically. " +
 			"A value of zero disables auto-removal.")]
@@ -38,10 +38,34 @@ namespace OpenRA.Mods.Common.Traits
 		}
 
 		bool IOccupySpaceInfo.SharesCell { get { return false; } }
+
+		public bool CanEnterCell(World world, Actor self, CPos cell, Actor ignoreActor = null, bool checkTransientActors = true)
+		{
+			return GetAvailableSubCell(world, cell, ignoreActor, checkTransientActors) != SubCell.Invalid;
+		}
+
+		public SubCell GetAvailableSubCell(World world, CPos cell, Actor ignoreActor = null, bool checkTransientActors = true)
+		{
+			if (!world.Map.Contains(cell))
+				return SubCell.Invalid;
+
+			var type = world.Map.GetTerrainInfo(cell).Type;
+			if (!TerrainTypes.Contains(type))
+				return SubCell.Invalid;
+
+			if (world.WorldActor.Trait<BuildingInfluence>().GetBuildingAt(cell) != null)
+				return SubCell.Invalid;
+
+			if (!checkTransientActors)
+				return SubCell.FullCell;
+
+			return !world.ActorMap.GetActorsAt(cell).Any(x => x != ignoreActor)
+				? SubCell.FullCell : SubCell.Invalid;
+		}
 	}
 
 	class Crate : ITick, IPositionable, ICrushable, ISync,
-		INotifyParachuteLanded, INotifyAddedToWorld, INotifyRemovedFromWorld, INotifyCrushed
+		INotifyParachute, INotifyAddedToWorld, INotifyRemovedFromWorld, INotifyCrushed
 	{
 		readonly Actor self;
 		readonly CrateInfo info;
@@ -70,7 +94,8 @@ namespace OpenRA.Mods.Common.Traits
 			OnCrushInner(crusher);
 		}
 
-		void INotifyParachuteLanded.OnLanded(Actor ignore)
+		void INotifyParachute.OnParachute(Actor self) { }
+		void INotifyParachute.OnLanded(Actor self, Actor ignore)
 		{
 			// Check whether the crate landed on anything
 			var landedOn = self.World.ActorMap.GetActorsAt(self.Location)
@@ -173,22 +198,7 @@ namespace OpenRA.Mods.Common.Traits
 		public SubCell GetValidSubCell(SubCell preferred = SubCell.Any) { return SubCell.FullCell; }
 		public SubCell GetAvailableSubCell(CPos cell, SubCell preferredSubCell = SubCell.Any, Actor ignoreActor = null, bool checkTransientActors = true)
 		{
-			if (!self.World.Map.Contains(cell))
-				return SubCell.Invalid;
-
-			var type = self.World.Map.GetTerrainInfo(cell).Type;
-			if (!info.TerrainTypes.Contains(type))
-				return SubCell.Invalid;
-
-			if (self.World.WorldActor.Trait<BuildingInfluence>().GetBuildingAt(cell) != null)
-				return SubCell.Invalid;
-
-			if (!checkTransientActors)
-				return SubCell.FullCell;
-
-			return !self.World.ActorMap.GetActorsAt(cell)
-				.Any(x => x != ignoreActor)
-				? SubCell.FullCell : SubCell.Invalid;
+			return info.GetAvailableSubCell(self.World, cell, ignoreActor, checkTransientActors);
 		}
 
 		public bool CanEnterCell(CPos a, Actor ignoreActor = null, bool checkTransientActors = true)

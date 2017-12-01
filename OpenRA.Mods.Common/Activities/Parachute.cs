@@ -1,6 +1,6 @@
-﻿#region Copyright & License Information
+#region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -17,7 +17,6 @@ namespace OpenRA.Mods.Common.Activities
 {
 	public class Parachute : Activity
 	{
-		readonly UpgradeManager um;
 		readonly IPositionable pos;
 		readonly ParachutableInfo para;
 		readonly WVec fallVector;
@@ -29,7 +28,6 @@ namespace OpenRA.Mods.Common.Activities
 
 		public Parachute(Actor self, WPos dropPosition, Actor ignoreActor = null)
 		{
-			um = self.TraitOrDefault<UpgradeManager>();
 			pos = self.TraitOrDefault<IPositionable>();
 			ignore = ignoreActor;
 
@@ -37,15 +35,15 @@ namespace OpenRA.Mods.Common.Activities
 			para = self.Info.TraitInfo<ParachutableInfo>();
 			fallVector = new WVec(0, 0, para.FallRate);
 			this.dropPosition = dropPosition;
+			IsInterruptible = false;
 		}
 
 		Activity FirstTick(Actor self)
 		{
 			triggered = true;
 
-			if (um != null)
-				foreach (var u in para.ParachuteUpgrade)
-					um.GrantUpgrade(self, u, this);
+			foreach (var np in self.TraitsImplementing<INotifyParachute>())
+				np.OnParachute(self);
 
 			// Place the actor and retrieve its visual position (CenterPosition)
 			pos.SetPosition(self, dropPosition);
@@ -59,12 +57,8 @@ namespace OpenRA.Mods.Common.Activities
 			var dat = self.World.Map.DistanceAboveTerrain(currentPosition);
 			pos.SetPosition(self, currentPosition - new WVec(WDist.Zero, WDist.Zero, dat));
 
-			if (um != null)
-				foreach (var u in para.ParachuteUpgrade)
-					um.RevokeUpgrade(self, u, this);
-
-			foreach (var npl in self.TraitsImplementing<INotifyParachuteLanded>())
-				npl.OnLanded(ignore);
+			foreach (var np in self.TraitsImplementing<INotifyParachute>())
+				np.OnLanded(self, ignore);
 
 			return NextActivity;
 		}
@@ -91,8 +85,5 @@ namespace OpenRA.Mods.Common.Activities
 		{
 			NextActivity = activity;
 		}
-
-		// Cannot be cancelled
-		public override void Cancel(Actor self) { }
 	}
 }

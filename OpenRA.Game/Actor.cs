@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -38,14 +38,13 @@ namespace OpenRA
 
 		public readonly uint ActorID;
 
-		public Player Owner { get; set; }
+		public Player Owner { get; internal set; }
 
 		public bool IsInWorld { get; internal set; }
 		public bool Disposed { get; private set; }
 
-		Activity currentActivity;
+		public Activity CurrentActivity { get; private set; }
 
-		public Group Group;
 		public int Generation;
 
 		public Rectangle Bounds { get; private set; }
@@ -54,7 +53,7 @@ namespace OpenRA
 		public IOccupySpace OccupiesSpace { get; private set; }
 		public ITargetable[] Targetables { get; private set; }
 
-		public bool IsIdle { get { return currentActivity == null; } }
+		public bool IsIdle { get { return CurrentActivity == null; } }
 		public bool IsDead { get { return Disposed || (health != null && health.IsDead); } }
 
 		public CPos Location { get { return OccupiesSpace.TopLeft; } }
@@ -161,7 +160,7 @@ namespace OpenRA
 		public void Tick()
 		{
 			var wasIdle = IsIdle;
-			currentActivity = ActivityUtils.RunActivity(this, currentActivity);
+			CurrentActivity = ActivityUtils.RunActivity(this, CurrentActivity);
 
 			if (!wasIdle && IsIdle)
 				foreach (var n in TraitsImplementing<INotifyBecomingIdle>())
@@ -200,21 +199,18 @@ namespace OpenRA
 
 		public void QueueActivity(Activity nextActivity)
 		{
-			if (currentActivity == null)
-				currentActivity = nextActivity;
+			if (CurrentActivity == null)
+				CurrentActivity = nextActivity;
 			else
-				currentActivity.Queue(nextActivity);
+				CurrentActivity.RootActivity.Queue(nextActivity);
 		}
 
-		public void CancelActivity()
+		public bool CancelActivity()
 		{
-			if (currentActivity != null)
-				currentActivity.Cancel(this);
-		}
+			if (CurrentActivity != null)
+				return CurrentActivity.RootActivity.Cancel(this);
 
-		public Activity GetCurrentActivity()
-		{
-			return currentActivity;
+			return true;
 		}
 
 		public override int GetHashCode()

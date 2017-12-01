@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -56,9 +56,12 @@ namespace OpenRA.Mods.D2k.Traits.Render
 			var overlay = new Animation(self.World, rs.GetImage(self));
 			overlay.Play(info.Sequence);
 
+			// These translucent overlays should not be included in highlight flashes
+			overlay.IsDecoration = true;
+
 			anim = new AnimationWithOffset(overlay,
 				() => body.LocalToWorld(info.Offset.Rotate(body.QuantizeOrientation(self, self.Orientation))),
-				() => !buildComplete);
+				() => !buildComplete || !delivering);
 
 			rs.Add(anim, info.Palette, info.IsPlayerPalette);
 		}
@@ -69,19 +72,18 @@ namespace OpenRA.Mods.D2k.Traits.Render
 				anim.Animation.PlayThen(info.Sequence, PlayDeliveryOverlay);
 		}
 
-		public void BuildingComplete(Actor self)
+		void INotifyBuildComplete.BuildingComplete(Actor self)
 		{
-			self.World.AddFrameEndTask(w => w.Add(new DelayedAction(120, () =>
-				buildComplete = true)));
+			buildComplete = true;
 		}
 
-		public void Sold(Actor self) { }
-		public void Selling(Actor self)
+		void INotifySold.Sold(Actor self) { }
+		void INotifySold.Selling(Actor self)
 		{
 			buildComplete = false;
 		}
 
-		public void IncomingDelivery(Actor self) { delivering = true; PlayDeliveryOverlay(); }
-		public void Delivered(Actor self) { delivering = false; }
+		void INotifyDelivery.IncomingDelivery(Actor self) { delivering = true; PlayDeliveryOverlay(); }
+		void INotifyDelivery.Delivered(Actor self) { delivering = false; }
 	}
 }

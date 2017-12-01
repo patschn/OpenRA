@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -21,28 +21,28 @@ namespace OpenRA.Mods.Common.Activities
 	public abstract class Enter : Activity
 	{
 		public enum ReserveStatus { None, TooFar, Pending, Ready }
-		enum State { ApproachingOrEntering, Inside, Exiting, Done }
+		enum EnterState { ApproachingOrEntering, Inside, Exiting, Done }
 
 		readonly IMove move;
 		readonly int maxTries = 0;
 		readonly EnterBehaviour enterBehaviour;
-		readonly bool targetCenter;
+		readonly bool repathWhileMoving;
 
 		public Target Target { get { return target; } }
 		Target target;
-		State nextState = State.ApproachingOrEntering; // Hint/starting point for next state
+		EnterState nextState = EnterState.ApproachingOrEntering; // Hint/starting point for next state
 		bool isEnteringOrInside = false; // Used to know if exiting should be used
 		WPos savedPos; // Position just before entering
 		Activity inner;
 		bool firstApproach = true;
 
-		protected Enter(Actor self, Actor target, EnterBehaviour enterBehaviour, int maxTries = 1, bool targetCenter = false)
+		protected Enter(Actor self, Actor target, EnterBehaviour enterBehaviour, int maxTries = 1, bool repathWhileMoving = true)
 		{
 			move = self.Trait<IMove>();
 			this.target = Target.FromActor(target);
 			this.maxTries = maxTries;
 			this.enterBehaviour = enterBehaviour;
-			this.targetCenter = targetCenter;
+			this.repathWhileMoving = repathWhileMoving;
 		}
 
 		// CanEnter(target) should to be true; otherwise, Enter may abort.
@@ -89,9 +89,9 @@ namespace OpenRA.Mods.Common.Activities
 		// Abort entering and/or leave if necessary
 		protected virtual void AbortOrExit(Actor self)
 		{
-			if (nextState == State.Done)
+			if (nextState == EnterState.Done)
 				return;
-			nextState = isEnteringOrInside ? State.Exiting : State.Done;
+			nextState = isEnteringOrInside ? EnterState.Exiting : EnterState.Done;
 			if (inner == this)
 				inner = null;
 			else if (inner != null)
@@ -103,27 +103,30 @@ namespace OpenRA.Mods.Common.Activities
 		// Cancel inner activity and mark as done unless already leaving or done
 		protected void Done(Actor self)
 		{
-			if (nextState == State.Done)
+			if (nextState == EnterState.Done)
 				return;
-			nextState = State.Done;
+			nextState = EnterState.Done;
 			if (inner == this)
 				inner = null;
 			else if (inner != null)
 				inner.Cancel(self);
 		}
 
-		public override void Cancel(Actor self)
+		public override bool Cancel(Actor self, bool keepQueue = false)
 		{
 			AbortOrExit(self);
-			if (nextState < State.Exiting)
-				base.Cancel(self);
+			if (nextState < EnterState.Exiting)
+				return base.Cancel(self);
 			else
 				NextActivity = null;
+
+			return true;
 		}
 
 		ReserveStatus TryReserveElseTryAlternateReserve(Actor self)
 		{
 			for (var tries = 0;;)
+			{
 				switch (Reserve(self))
 				{
 					case ReserveStatus.None:
@@ -143,7 +146,10 @@ namespace OpenRA.Mods.Common.Activities
 						Target t = target;
 						if (!TryGetAlternateTarget(self, tries, ref t))
 							return ReserveStatus.TooFar;
-						if ((target.CenterPosition - self.CenterPosition).HorizontalLengthSquared <= (t.CenterPosition - self.CenterPosition).HorizontalLengthSquared)
+
+						var targetPosition = target.Positions.PositionClosestTo(self.CenterPosition);
+						var alternatePosition = t.Positions.PositionClosestTo(self.CenterPosition);
+						if ((targetPosition - self.CenterPosition).HorizontalLengthSquared <= (alternatePosition - self.CenterPosition).HorizontalLengthSquared)
 							return ReserveStatus.TooFar;
 						target = t;
 						continue;
@@ -152,25 +158,30 @@ namespace OpenRA.Mods.Common.Activities
 					case ReserveStatus.Ready:
 						return ReserveStatus.Ready;
 				}
+			}
 		}
 
-		State FindAndTransitionToNextState(Actor self)
+		EnterState FindAndTransitionToNextState(Actor self)
 		{
 			switch (nextState)
 			{
-				case State.ApproachingOrEntering:
+				case EnterState.ApproachingOrEntering:
 
 					// Reserve to enter or approach
 					isEnteringOrInside = false;
 					switch (TryReserveElseTryAlternateReserve(self))
 					{
 						case ReserveStatus.None:
-							return State.Done; // No available target -> abort to next activity
+							return EnterState.Done; // No available target -> abort to next activity
 						case ReserveStatus.TooFar:
-							inner = move.MoveToTarget(self, targetCenter ? Target.FromPos(target.CenterPosition) : target); // Approach
-							return State.ApproachingOrEntering;
+						{
+							var moveTarget = repathWhileMoving ? target : Target.FromPos(target.Positions.PositionClosestTo(self.CenterPosition));
+							inner = move.MoveToTarget(self, moveTarget); // Approach
+							return EnterState.ApproachingOrEntering;
+						}
+
 						case ReserveStatus.Pending:
-							return State.ApproachingOrEntering; // Retry next tick
+							return EnterState.ApproachingOrEntering; // Retry next tick
 						case ReserveStatus.Ready:
 							break; // Reserved target -> start entering target
 					}
@@ -183,38 +194,38 @@ namespace OpenRA.Mods.Common.Activities
 
 					if (inner != null)
 					{
-						nextState = State.Inside; // Should be inside once inner activity is null
-						return State.ApproachingOrEntering;
+						nextState = EnterState.Inside; // Should be inside once inner activity is null
+						return EnterState.ApproachingOrEntering;
 					}
 
 					// Can enter but there is no activity for it, so go inside without one
-					goto case State.Inside;
+					goto case EnterState.Inside;
 
-				case State.Inside:
+				case EnterState.Inside:
 					// Might as well teleport into target if there is no MoveIntoTarget activity
-					if (nextState == State.ApproachingOrEntering)
-						nextState = State.Inside;
+					if (nextState == EnterState.ApproachingOrEntering)
+						nextState = EnterState.Inside;
 
 					// Otherwise, try to recover from moving target
-					else if (target.CenterPosition != self.CenterPosition)
+					else if (target.Positions.PositionClosestTo(self.CenterPosition) != self.CenterPosition)
 					{
-						nextState = State.ApproachingOrEntering;
+						nextState = EnterState.ApproachingOrEntering;
 						Unreserve(self, false);
 						if (Reserve(self) == ReserveStatus.Ready)
 						{
 							inner = move.MoveIntoTarget(self, target); // Enter
 							if (inner != null)
-								return State.ApproachingOrEntering;
+								return EnterState.ApproachingOrEntering;
 
-							nextState = State.ApproachingOrEntering;
-							goto case State.ApproachingOrEntering;
+							nextState = EnterState.ApproachingOrEntering;
+							goto case EnterState.ApproachingOrEntering;
 						}
 
-						nextState = State.ApproachingOrEntering;
+						nextState = EnterState.ApproachingOrEntering;
 						isEnteringOrInside = false;
 						inner = move.MoveIntoWorld(self, self.World.Map.CellContaining(savedPos));
 
-						return State.ApproachingOrEntering;
+						return EnterState.ApproachingOrEntering;
 					}
 
 					OnInside(self);
@@ -225,29 +236,29 @@ namespace OpenRA.Mods.Common.Activities
 						self.Dispose();
 
 					// Return if Abort(Actor) or Done(self) was called from OnInside.
-					if (nextState >= State.Exiting)
-						return State.Inside;
+					if (nextState >= EnterState.Exiting)
+						return EnterState.Inside;
 
 					inner = this; // Start inside activity
-					nextState = State.Exiting; // Exit once inner activity is null (unless Done(self) is called)
-					return State.Inside;
+					nextState = EnterState.Exiting; // Exit once inner activity is null (unless Done(self) is called)
+					return EnterState.Inside;
 
 				// TODO: Handle target moved while inside or always call done for movable targets and use a separate exit activity
-				case State.Exiting:
+				case EnterState.Exiting:
 					inner = move.MoveIntoWorld(self, self.World.Map.CellContaining(savedPos));
 
 					// If not successfully exiting, retry on next tick
 					if (inner == null)
-						return State.Exiting;
+						return EnterState.Exiting;
 					isEnteringOrInside = false;
-					nextState = State.Done;
-					return State.Exiting;
+					nextState = EnterState.Done;
+					return EnterState.Exiting;
 
-				case State.Done:
-					return State.Done;
+				case EnterState.Done:
+					return EnterState.Done;
 			}
 
-			return State.Done; // dummy to quiet dumb compiler
+			return EnterState.Done; // dummy to quiet dumb compiler
 		}
 
 		Activity CanceledTick(Actor self)
@@ -265,18 +276,18 @@ namespace OpenRA.Mods.Common.Activities
 				return CanceledTick(self);
 
 			// Check target validity if not exiting or done
-			if (nextState != State.Done && (target.Type != TargetType.Actor || !target.IsValidFor(self)))
+			if (nextState != EnterState.Done && (target.Type != TargetType.Actor || !target.IsValidFor(self)))
 				AbortOrExit(self);
 
 			// If no current activity, tick next activity
-			if (inner == null && FindAndTransitionToNextState(self) == State.Done)
+			if (inner == null && FindAndTransitionToNextState(self) == EnterState.Done)
 				return CanceledTick(self);
 
 			// Run inner activity/InsideTick
 			inner = inner == this ? InsideTick(self) : ActivityUtils.RunActivity(self, inner);
 
 			// If we are finished, move on to next activity
-			if (inner == null && nextState == State.Done)
+			if (inner == null && nextState == EnterState.Done)
 				return NextActivity;
 
 			return this;

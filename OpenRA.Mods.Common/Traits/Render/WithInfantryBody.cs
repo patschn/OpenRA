@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -18,13 +18,17 @@ using OpenRA.Traits;
 
 namespace OpenRA.Mods.Common.Traits.Render
 {
-	public class WithInfantryBodyInfo : UpgradableTraitInfo, IRenderActorPreviewSpritesInfo, Requires<IMoveInfo>, Requires<RenderSpritesInfo>
+	public class WithInfantryBodyInfo : ConditionalTraitInfo, IRenderActorPreviewSpritesInfo, Requires<IMoveInfo>, Requires<RenderSpritesInfo>
 	{
 		public readonly int MinIdleDelay = 30;
 		public readonly int MaxIdleDelay = 110;
 
 		[SequenceReference] public readonly string MoveSequence = "run";
-		[SequenceReference] public readonly string AttackSequence = null;
+		[SequenceReference] public readonly string DefaultAttackSequence = null;
+
+		// TODO: [SequenceReference] isn't smart enough to use Dictionaries.
+		[Desc("Attack sequence to use for each armament.")]
+		public readonly Dictionary<string, string> AttackSequences = new Dictionary<string, string>();
 		[SequenceReference] public readonly string[] IdleSequences = { };
 		[SequenceReference] public readonly string[] StandSequences = { "stand" };
 
@@ -38,7 +42,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 		}
 	}
 
-	public class WithInfantryBody : UpgradableTrait<WithInfantryBodyInfo>, ITick, INotifyAttack, INotifyIdle, INotifyCreated
+	public class WithInfantryBody : ConditionalTrait<WithInfantryBodyInfo>, ITick, INotifyAttack, INotifyIdle
 	{
 		readonly IMove move;
 		protected readonly Animation DefaultAnimation;
@@ -76,9 +80,11 @@ namespace OpenRA.Mods.Common.Traits.Render
 			}
 		}
 
-		public void Created(Actor self)
+		protected override void Created(Actor self)
 		{
 			rsm = self.TraitOrDefault<IRenderInfantrySequenceModifier>();
+
+			base.Created(self);
 		}
 
 		protected virtual string NormalizeInfantrySequence(Actor self, string baseSequence)
@@ -96,18 +102,22 @@ namespace OpenRA.Mods.Common.Traits.Render
 			return !IsModifyingSequence;
 		}
 
-		public void Attacking(Actor self, Target target)
+		public void Attacking(Actor self, Target target, Armament a)
 		{
-			if (!string.IsNullOrEmpty(Info.AttackSequence) && DefaultAnimation.HasSequence(NormalizeInfantrySequence(self, Info.AttackSequence)))
+			string sequence;
+			if (!Info.AttackSequences.TryGetValue(a.Info.Name, out sequence))
+				sequence = Info.DefaultAttackSequence;
+
+			if (!string.IsNullOrEmpty(sequence) && DefaultAnimation.HasSequence(NormalizeInfantrySequence(self, sequence)))
 			{
 				state = AnimationState.Attacking;
-				DefaultAnimation.PlayThen(NormalizeInfantrySequence(self, Info.AttackSequence), () => state = AnimationState.Idle);
+				DefaultAnimation.PlayThen(NormalizeInfantrySequence(self, sequence), () => state = AnimationState.Idle);
 			}
 		}
 
 		void INotifyAttack.PreparingAttack(Actor self, Target target, Armament a, Barrel barrel)
 		{
-			Attacking(self, target);
+			Attacking(self, target, a);
 		}
 
 		void INotifyAttack.Attacking(Actor self, Target target, Armament a, Barrel barrel) { }

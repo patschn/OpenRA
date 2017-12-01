@@ -15,6 +15,7 @@ MultiCluster:
 		Palette: ra
 		MinimumLaunchSpeed: 75
 		Speed: 384
+		TerrainHeightAware: true
 	Warhead@1Dam: SpreadDamage
 		Spread: 128
 		Damage: 65
@@ -29,12 +30,12 @@ MultiCluster:
 	Warhead@2Eff: CreateEffect
 		Explosions: large_explosion
 		ImpactSounds: expnew09.aud
-		InvalidImpactTypes: Water
+		ValidTargets: Ground, Air
 	Warhead@3EffWater: CreateEffect
 		Explosions: small_watersplash
 		ExplosionPalette: player
-		ImpactSounds: ssplash2.aud
-		ValidImpactTypes: Water
+		ValidTargets: Water
+		InvalidTargets: Vehicle
 	Warhead@4Smu: LeaveSmudge
 		SmudgeType: MediumCrater
 		InvalidTargets: Vehicle, Building, Wall
@@ -56,19 +57,19 @@ SuicideBomb:
 	Warhead@2Res: DestroyResource
 
 IonCannon:
-	ValidTargets: Ground, Air
+	ValidTargets: Ground, Water, Air
 	Warhead@1Dam_impact: SpreadDamage
 		Spread: 1c0
 		Damage: 100
 		Falloff: 1000, 368, 135, 50, 18, 7, 0
-		ValidTargets: Ground, Air
+		ValidTargets: Ground, Water, Air
 		DamageTypes: Prone100Percent, TriggerProne, EnergyDeath
 	Warhead@2Dam_area: SpreadDamage
 		Spread: 1c0
 		Damage: 250
 		Falloff: 100, 50, 25, 0
 		Delay: 3
-		ValidTargets: Ground, Air
+		ValidTargets: Ground, Water, Air
 		DamageTypes: Prone50Percent, TriggerProne, EnergyDeath
 	Warhead@3Smu_area: LeaveSmudge
 		SmudgeType: SmallScorch
@@ -77,17 +78,29 @@ IonCannon:
 		Delay: 3
 	Warhead@4Effect: CreateEffect
 		Explosions: ionbeam
-		ImpactSound: ion1.aud
+		ExplosionPalette: effect-ignore-lighting-alpha75
+		ImpactSounds: ion1.aud
+		VictimScanRadius: 0
 	Warhead@5Effect: CreateEffect
 		Explosions: ionbeam2
+		ExplosionPalette: effect-ignore-lighting-alpha75
+		VictimScanRadius: 0
 	Warhead@6Effect: CreateEffect
 		Explosions: ionbeam3
+		ExplosionPalette: effect-ignore-lighting-alpha75
+		VictimScanRadius: 0
 	Warhead@7Effect: CreateEffect
 		Explosions: ionbeam4
+		ExplosionPalette: effect-ignore-lighting-alpha75
+		VictimScanRadius: 0
 	Warhead@8Effect: CreateEffect
 		Explosions: ionbeam5
+		ExplosionPalette: effect-ignore-lighting-alpha75
+		VictimScanRadius: 0
 	Warhead@9Effect: CreateEffect
 		Explosions: ionbeam6
+		ExplosionPalette: effect-ignore-lighting-alpha75
+		VictimScanRadius: 0
 
 EMPulseCannon:
 	ReloadDelay: 100
@@ -97,14 +110,16 @@ EMPulseCannon:
 		Speed: 425
 		Blockable: false
 		Shadow: true
-		Angle: 62
+		LaunchAngle: 62
 		Image: pulsball
 	Warhead@1Eff: CreateEffect
 		Explosions: pulse_explosion
-	Warhead@emp: GrantUpgrade
+		ExplosionPalette: effect-ignore-lighting-alpha75
+		VictimScanRadius: 0
+	Warhead@emp: GrantExternalCondition
 		Range: 4c0
 		Duration: 250
-		Upgrades: empdisable, notmobile
+		Condition: empdisable
 
 ClusterMissile:
 	ValidTargets: Ground, Water, Air
@@ -118,7 +133,9 @@ ClusterMissile:
 		DamageTypes: Prone50Percent, TriggerProne, FireDeath
 	Warhead@SoundEffect0: CreateEffect
 		Explosions: large_explosion
+		ExplosionPalette: effect-ignore-lighting-alpha75
 		ImpactSounds: expnew19.aud
+		VictimScanRadius: 0
 	Warhead@ResourceDestruction0: DestroyResource
 		Size: 1
 	Warhead@ClusterSmudges0: LeaveSmudge

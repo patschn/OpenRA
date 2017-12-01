@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -22,10 +22,11 @@ namespace OpenRA.Mods.D2k.Traits
 		public readonly ushort Template = 0;
 
 		[FieldLoader.Require]
-		[Desc("The terrain types that this template will be placed on")]
+		[Desc("The terrain types that this template will be placed on.")]
 		public readonly HashSet<string> TerrainTypes = new HashSet<string>();
 
-		[Desc("Offset relative to the actor TopLeft. Not used if the template is PickAny")]
+		[Desc("Offset relative to the actor TopLeft. Not used if the template is PickAny.",
+			"Tiles being offset out of the actor's footprint will not be placed.")]
 		public readonly CVec Offset = CVec.Zero;
 
 		public object Create(ActorInitializer init) { return new LaysTerrain(init.Self, this); }
@@ -37,6 +38,7 @@ namespace OpenRA.Mods.D2k.Traits
 		readonly BuildableTerrainLayer layer;
 		readonly BuildingInfluence bi;
 		readonly TerrainTemplateInfo template;
+		readonly BuildingInfo buildingInfo;
 
 		public LaysTerrain(Actor self, LaysTerrainInfo info)
 		{
@@ -44,6 +46,7 @@ namespace OpenRA.Mods.D2k.Traits
 			layer = self.World.WorldActor.Trait<BuildableTerrainLayer>();
 			bi = self.World.WorldActor.Trait<BuildingInfluence>();
 			template = self.World.Map.Rules.TileSet.Templates[info.Template];
+			buildingInfo = self.Info.TraitInfo<BuildingInfo>();
 		}
 
 		public void AddedToWorld(Actor self)
@@ -53,7 +56,7 @@ namespace OpenRA.Mods.D2k.Traits
 			if (template.PickAny)
 			{
 				// Fill the footprint with random variants
-				foreach (var c in FootprintUtils.Tiles(self))
+				foreach (var c in buildingInfo.Tiles(self.Location))
 				{
 					// Only place on allowed terrain types
 					if (!map.Contains(c) || !info.TerrainTypes.Contains(map.GetTerrainInfo(c).Type))

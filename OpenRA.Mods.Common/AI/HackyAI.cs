@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -58,7 +58,11 @@ namespace OpenRA.Mods.Common.AI
 			public readonly HashSet<string> Silo = new HashSet<string>();
 		}
 
-		[Desc("Ingame name this bot uses.")]
+		[FieldLoader.Require]
+		[Desc("Internal id for this bot.")]
+		public readonly string Type = null;
+
+		[Desc("Human-readable name this bot uses.")]
 		public readonly string Name = "Unnamed Bot";
 
 		[Desc("Minimum number of units AI must have before attacking.")]
@@ -162,8 +166,6 @@ namespace OpenRA.Mods.Common.AI
 		[Desc("Should the AI repair its buildings if damaged?")]
 		public readonly bool ShouldRepairBuildings = true;
 
-		string IBotInfo.Name { get { return Name; } }
-
 		[Desc("What units to the AI should build.", "What % of the total army must be this type of unit.")]
 		public readonly Dictionary<string, float> UnitsToBuild = null;
 
@@ -233,6 +235,10 @@ namespace OpenRA.Mods.Common.AI
 			return ret;
 		}
 
+		string IBotInfo.Type { get { return Type; } }
+
+		string IBotInfo.Name { get { return Name; } }
+
 		public object Create(ActorInitializer init) { return new HackyAI(this, init); }
 	}
 
@@ -257,8 +263,7 @@ namespace OpenRA.Mods.Common.AI
 		public Player Player { get; private set; }
 
 		readonly DomainIndex domainIndex;
-		readonly ResourceLayer resLayer;
-		readonly ResourceClaimLayer territory;
+		readonly ResourceClaimLayer claimLayer;
 		readonly IPathFinder pathfinder;
 
 		readonly Func<Actor, bool> isEnemyUnit;
@@ -305,8 +310,7 @@ namespace OpenRA.Mods.Common.AI
 				return;
 
 			domainIndex = World.WorldActor.Trait<DomainIndex>();
-			resLayer = World.WorldActor.Trait<ResourceLayer>();
-			territory = World.WorldActor.TraitOrDefault<ResourceClaimLayer>();
+			claimLayer = World.WorldActor.TraitOrDefault<ResourceClaimLayer>();
 			pathfinder = World.WorldActor.Trait<IPathFinder>();
 
 			isEnemyUnit = unit =>
@@ -342,7 +346,7 @@ namespace OpenRA.Mods.Common.AI
 			foreach (var defense in Info.DefenseQueues)
 				builders.Add(new BaseBuilder(this, defense, p, playerPower, playerResource));
 
-			Random = new MersenneTwister((int)p.PlayerActor.ActorID);
+			Random = new MersenneTwister(Game.CosmeticRandom.Next());
 
 			// Avoid all AIs trying to rush in the same tick, randomize their initial rush a little.
 			var smallFractionOfRushInterval = Info.RushInterval / 20;
@@ -562,7 +566,7 @@ namespace OpenRA.Mods.Common.AI
 
 					foreach (var r in nearbyResources)
 					{
-						var found = findPos(r, baseCenter, Info.MinBaseRadius, Info.MaxBaseRadius);
+						var found = findPos(baseCenter, r, Info.MinBaseRadius, Info.MaxBaseRadius);
 						if (found != null)
 							return found;
 					}
@@ -763,19 +767,22 @@ namespace OpenRA.Mods.Common.AI
 			return targets.MinByOrDefault(target => (target.Actor.CenterPosition - capturer.CenterPosition).LengthSquared);
 		}
 
-		CPos FindNextResource(Actor harvester)
+		CPos FindNextResource(Actor actor, Harvester harv)
 		{
-			var harvInfo = harvester.Info.TraitInfo<HarvesterInfo>();
-			var mobileInfo = harvester.Info.TraitInfo<MobileInfo>();
+			var mobileInfo = actor.Info.TraitInfo<MobileInfo>();
 			var passable = (uint)mobileInfo.GetMovementClass(World.Map.Rules.TileSet);
 
+			Func<CPos, bool> isValidResource = cell =>
+				domainIndex.IsPassable(actor.Location, cell, mobileInfo, passable) &&
+				harv.CanHarvestCell(actor, cell) &&
+				claimLayer.CanClaimCell(actor, cell);
+
 			var path = pathfinder.FindPath(
-				PathSearch.Search(World, mobileInfo, harvester, true,
-					loc => domainIndex.IsPassable(harvester.Location, loc, passable) && harvester.CanHarvestAt(loc, resLayer, harvInfo, territory))
+				PathSearch.Search(World, mobileInfo, actor, true, isValidResource)
 					.WithCustomCost(loc => World.FindActorsInCircle(World.Map.CenterOfCell(loc), Info.HarvesterEnemyAvoidanceRadius)
-						.Where(u => !u.IsDead && harvester.Owner.Stances[u.Owner] == Stance.Enemy)
+						.Where(u => !u.IsDead && actor.Owner.Stances[u.Owner] == Stance.Enemy)
 						.Sum(u => Math.Max(WDist.Zero.Length, Info.HarvesterEnemyAvoidanceRadius.Length - (World.Map.CenterOfCell(loc) - u.CenterPosition).Length)))
-					.FromPoint(harvester.Location));
+					.FromPoint(actor.Location));
 
 			if (path.Count == 0)
 				return CPos.Zero;
@@ -794,8 +801,7 @@ namespace OpenRA.Mods.Common.AI
 
 				if (!harvester.IsIdle)
 				{
-					var act = harvester.GetCurrentActivity();
-
+					var act = harvester.CurrentActivity;
 					if (act.NextActivity == null || act.NextActivity.GetType() != typeof(FindResources))
 						continue;
 				}
@@ -804,7 +810,7 @@ namespace OpenRA.Mods.Common.AI
 					continue;
 
 				// Tell the idle harvester to quit slacking:
-				var newSafeResourcePatch = FindNextResource(harvester);
+				var newSafeResourcePatch = FindNextResource(harvester, harv);
 				BotDebug("AI: Harvester {0} is idle. Ordering to {1} in search for new resources.".F(harvester, newSafeResourcePatch));
 				QueueOrder(new Order("Harvest", harvester, false) { TargetLocation = newSafeResourcePatch });
 			}
@@ -1028,7 +1034,7 @@ namespace OpenRA.Mods.Common.AI
 					// Valid target found, delay by a few ticks to avoid rescanning before power fires via order
 					BotDebug("AI: {2} found new target location {0} for support power {1}.", attackLocation, sp.Info.OrderName, Player.PlayerName);
 					waitingPowers[sp] += 10;
-					QueueOrder(new Order(sp.Info.OrderName, supportPowerMngr.Self, false) { TargetLocation = attackLocation.Value, SuppressVisualFeedback = true });
+					QueueOrder(new Order(sp.Key, supportPowerMngr.Self, false) { TargetLocation = attackLocation.Value, SuppressVisualFeedback = true });
 				}
 			}
 		}
@@ -1045,15 +1051,16 @@ namespace OpenRA.Mods.Common.AI
 				return null;
 			}
 
+			var map = World.Map;
 			var checkRadius = powerDecision.CoarseScanRadius;
-			for (var i = 0; i < World.Map.MapSize.X; i += checkRadius)
+			for (var i = 0; i < map.MapSize.X; i += checkRadius)
 			{
-				for (var j = 0; j < World.Map.MapSize.Y; j += checkRadius)
+				for (var j = 0; j < map.MapSize.Y; j += checkRadius)
 				{
 					var consideredAttractiveness = 0;
 
-					var tl = World.Map.CenterOfCell(new CPos(i, j));
-					var br = World.Map.CenterOfCell(new CPos(i + checkRadius, j + checkRadius));
+					var tl = World.Map.CenterOfCell(new MPos(i, j).ToCPos(map));
+					var br = World.Map.CenterOfCell(new MPos(i + checkRadius, j + checkRadius).ToCPos(map));
 					var targets = World.ActorMap.ActorsInBox(tl, br);
 
 					consideredAttractiveness = powerDecision.GetAttractiveness(targets, Player);
@@ -1061,7 +1068,7 @@ namespace OpenRA.Mods.Common.AI
 						continue;
 
 					bestAttractiveness = consideredAttractiveness;
-					bestLocation = new CPos(i, j);
+					bestLocation = new MPos(i, j).ToCPos(map);
 				}
 			}
 

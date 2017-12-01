@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -30,7 +30,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 			anim.PlayFetchIndex(RenderSprites.NormalizeSequence(anim, init.GetDamageState(), Sequence), () => 0);
 
 			var bi = init.Actor.TraitInfo<BuildingInfo>();
-			var offset = FootprintUtils.CenterOffset(init.World, bi).Y + 512; // Additional 512 units move from center -> top of cell
+			var offset = bi.CenterOffset(init.World).Y + 512; // Additional 512 units move from center -> top of cell
 			yield return new SpriteActorPreview(anim, () => WVec.Zero, () => offset, p, rs.Scale);
 		}
 	}
@@ -53,34 +53,34 @@ namespace OpenRA.Mods.Common.Traits.Render
 
 			var buildingInfo = self.Info.TraitInfo<BuildingInfo>();
 
-			var offset = FootprintUtils.CenterOffset(self.World, buildingInfo).Y + 512;
+			var offset = buildingInfo.CenterOffset(self.World).Y + 512;
 			renderSprites.Add(new AnimationWithOffset(door, null, () => !buildComplete, offset));
 		}
 
-		public void BuildingComplete(Actor self)
+		void INotifyBuildComplete.BuildingComplete(Actor self)
 		{
 			buildComplete = true;
 		}
 
-		public void Tick(Actor self)
+		void ITick.Tick(Actor self)
 		{
 			if (desiredFrame > 0 && !self.World.ActorMap.GetActorsAt(openExit).Any(a => a != self))
 				desiredFrame = 0;
 		}
 
-		public void DamageStateChanged(Actor self, AttackInfo e)
+		void INotifyDamageStateChanged.DamageStateChanged(Actor self, AttackInfo e)
 		{
 			if (door.CurrentSequence != null)
 				door.ReplaceAnim(RenderSprites.NormalizeSequence(door, e.DamageState, door.CurrentSequence.Name));
 		}
 
-		public void UnitProduced(Actor self, Actor other, CPos exit)
+		void INotifyProduction.UnitProduced(Actor self, Actor other, CPos exit)
 		{
 			openExit = exit;
 			desiredFrame = door.CurrentSequence.Length - 1;
 		}
 
-		public void Selling(Actor self) { buildComplete = false; }
-		public void Sold(Actor self) { }
+		void INotifySold.Selling(Actor self) { buildComplete = false; }
+		void INotifySold.Sold(Actor self) { }
 	}
 }

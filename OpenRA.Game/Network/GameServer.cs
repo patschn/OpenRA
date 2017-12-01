@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -39,16 +39,29 @@ namespace OpenRA.Network
 			FieldLoader.Load(this, yaml);
 
 			Manifest mod;
+			ExternalMod external;
 			var modVersion = Mods.Split('@');
-			if (modVersion.Length == 2 && Game.Mods.TryGetValue(modVersion[0], out mod))
+
+			ModLabel = "Unknown mod: {0}".F(Mods);
+			if (modVersion.Length == 2)
 			{
 				ModId = modVersion[0];
 				ModVersion = modVersion[1];
-				ModLabel = "{0} ({1})".F(mod.Metadata.Title, modVersion[1]);
-				IsCompatible = Game.Settings.Debug.IgnoreVersionMismatch || ModVersion == mod.Metadata.Version;
+
+				var externalKey = ExternalMod.MakeKey(modVersion[0], modVersion[1]);
+				if (Game.ExternalMods.TryGetValue(externalKey, out external)
+					&& external.Version == modVersion[1])
+				{
+					ModLabel = "{0} ({1})".F(external.Title, external.Version);
+					IsCompatible = true;
+				}
+				else if (Game.Mods.TryGetValue(modVersion[0], out mod))
+				{
+					// Use internal mod data to populate the section header, but
+					// on-connect switching must use the external mod plumbing.
+					ModLabel = "{0} ({1})".F(mod.Metadata.Title, modVersion[1]);
+				}
 			}
-			else
-				ModLabel = "Unknown mod: {0}".F(Mods);
 
 			var mapAvailable = Game.Settings.Game.AllowDownloading || Game.ModData.MapCache[Map].Status == MapStatus.Available;
 			IsJoinable = IsCompatible && State == 1 && mapAvailable;

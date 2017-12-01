@@ -68,11 +68,11 @@ MNLYR:
 		Queue: Vehicle
 		BuildPaletteOrder: 30
 		Prerequisites: fix
+		Description: Lays mines to destroy unwary enemy units.\n  Unarmed
 	Valued:
 		Cost: 800
 	Tooltip:
 		Name: Bomber
-		Description: Lays mines to destroy unwary enemy units.\n  Unarmed
 	Health:
 		HP: 500
 	Armor:
@@ -91,12 +91,13 @@ MNLYR:
 		Offset: 0,0
 		Facing: 96
 	CashTrickler:
-		Period: 150
+		Interval: 150
 		Amount: 20
 	RenderSprites:
 		Image: MNLY
 	Chronoshiftable:
 		ReturnToOrigin: false
+	HitShape:
 
 FTUR:
 	Health:
@@ -108,7 +109,7 @@ FTUR:
 	MustBeDestroyed:
 		RequiredForShortGame: true
 	CashTrickler:
-		Period: 150
+		Interval: 150
 		Amount: 30
 	ChronoshiftPower:
 		Icon: chrono
@@ -119,7 +120,7 @@ FTUR:
 		BeginChargeSound: chrochr1.aud
 		EndChargeSound: chrordy1.aud
 		Range: 3
-	GrantUpgradePower@IRONCURTAIN:
+	GrantExternalConditionPower@IRONCURTAIN:
 		Icon: invuln
 		ChargeTime: 30
 		Description: Invulnerability
@@ -129,8 +130,9 @@ FTUR:
 		BeginChargeSound: ironchg1.aud
 		EndChargeSound: ironrdy1.aud
 		Range: 1
-		Upgrades: invulnerability
-		GrantUpgradeSequence: idle
+		Condition: invulnerability
+		Sequence: idle
+		OnFireSound: ironcur9.aud
 	Power:
 		Amount: 0
 
@@ -145,6 +147,7 @@ MINVV:
 	Buildable:
 		Queue: Building
 		BuildPaletteOrder: 30
+		Description: Bomb (Hotkey B)
 	Valued:
 		Cost: 30
 	Health:
@@ -154,7 +157,6 @@ MINVV:
 	WithSpriteBody:
 	Tooltip:
 		Name: Bomb
-		Description: Bomb (Hotkey B)
 	SelfHealing:
 		Step: -1
 		Delay: 1
@@ -163,6 +165,7 @@ MINVV:
 	Explodes:
 		Weapon: CrateNuke
 		EmptyWeapon: CrateNuke
+	HitShape:
 
 T17:
 	Health:
@@ -186,7 +189,7 @@ T17:
 		Duration: 999999
 		KillCargo: yes
 		Range: 3
-	GrantUpgradePower@IRONCURTAIN:
+	GrantExternalConditionPower@IRONCURTAIN:
 		Icon: invuln
 		ChargeTime: 30
 		Description: Invulnerability
@@ -196,5 +199,6 @@ T17:
 		BeginChargeSound: ironchg1.aud
 		EndChargeSound: ironrdy1.aud
 		Range: 1
-		Upgrades: invulnerability
-		GrantUpgradeSequence: idle
+		Condition: invulnerability
+		Sequence: idle
+		OnFireSound: ironcur9.aud

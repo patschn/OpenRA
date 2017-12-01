@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2016 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -34,7 +34,7 @@ namespace OpenRA.Traits
 			while (act != null)
 			{
 				var prev = act;
-				act = act.Tick(self);
+				act = act.TickOuter(self);
 				var current = Stopwatch.GetTimestamp();
 				if (current - start > longTickThresholdInStopwatchTicks)
 				{
@@ -44,7 +44,7 @@ namespace OpenRA.Traits
 				else
 					start = current;
 
-				if (prev == act)
+				if (act == prev || act == prev.ParentActivity)
 					break;
 			}
 
